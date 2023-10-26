@@ -1,0 +1,20 @@
+---
+# Validate credentials (always run)
+- name: Validate credentials
+  hosts: all
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  gather_facts: no
+
+  roles:
+    - role: check_creds
+
+# Play to remove VM snapshots
+- name: Remove VM snapshots
+  hosts: all
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  gather_facts: no
+
+  roles:
+    - role: remove_snapshots

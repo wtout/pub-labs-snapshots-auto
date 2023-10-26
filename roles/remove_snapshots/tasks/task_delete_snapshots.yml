@@ -1,0 +1,54 @@
+---
+# Tasks to delete snapshots of a VM in a given folder
+- block:
+  - name: get info for {{ curr_vm }} in {{ curr_folder }}
+    community.vmware.vmware_guest_info:
+      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+      folder: "{{ curr_folder }}"
+      name: "{{ curr_vm }}"
+      validate_certs: no
+    register: reg_guest_info
+    no_log: yes
+  - name: define list of snapshots found
+    ansible.builtin.set_fact:
+      snapshots_list: "{{ snapshots_list|default([]) + [curr_folder + ': ' + curr_vm + ': ' + snapshot_item.name] }}"
+    when:
+      - reg_guest_info.instance.snapshots != []
+      - (ansible_date_time.date|to_datetime('%Y-%m-%d') - snapshot_item.creation_time|split('T')|first|to_datetime('%Y-%m-%d')).days|int >= datacenter.primary.max_age
+    loop: "{{ reg_guest_info.instance.snapshots }}"
+    loop_control:
+      loop_var: snapshot_item
+      label: "{{ snapshot_item }}"
+  - name: update number of snapshots found
+    ansible.builtin.set_fact:
+      snapshots_counter: "{{ snapshots_counter|default(0)|int + 1 }}"
+    when:
+      - reg_guest_info.instance.snapshots != []
+      - (ansible_date_time.date|to_datetime('%Y-%m-%d') - snapshot_item.creation_time|split('T')|first|to_datetime('%Y-%m-%d')).days|int >= datacenter.primary.max_age
+    loop: "{{ reg_guest_info.instance.snapshots }}"
+    loop_control:
+      loop_var: snapshot_item
+      label: "{{ snapshot_item }}"
+  - name: Remove snapshots for {{ curr_vm }} in {{ curr_folder }}
+    community.vmware.vmware_guest_snapshot:
+      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+      folder: "{{ curr_folder }}"
+      name: "{{ curr_vm }}"
+      state: absent
+      snapshot_name: "{{ snapshot_item.name }}"
+      validate_certs: no
+    when:
+      - reg_guest_info.instance.snapshots != []
+      - (ansible_date_time.date|to_datetime('%Y-%m-%d') - snapshot_item.creation_time|split('T')|first|to_datetime('%Y-%m-%d')).days|int >= datacenter.primary.max_age
+    no_log: yes
+    loop: "{{ reg_guest_info.instance.snapshots }}"
+    loop_control:
+      loop_var: snapshot_item
+      label: "{{ snapshot_item }}"
+  tags: ['always', 'remove_snapshots']

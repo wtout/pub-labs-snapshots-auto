@@ -1,0 +1,98 @@
+---
+auto_dir: "{{ lookup('env', 'PWD') }}"
+invoker: "{{ lookup('env', 'MYINVOKER') }}"
+proxy_address: "{{ lookup('env', 'MYPROXY') }}"
+host_os: "{{ lookup('env', 'MYHOSTOS') }}"
+##########################################
+# Do not modify anything below this line
+##########################################
+datacenters:
+  STG-HX-DC:
+    vsphere: 'sastgvcap01.staging.cisco-cms.com'
+    deptype: 'h'
+    folder: 'Hosted Customers'
+    cluster: 'STGHX'
+    datastore_cluster: 'STGHXCLUS'
+    storage_datastore: 'STG-HX-DS1'
+    storage_path: ''
+
+  RTP-Staging:
+    vsphere: 'sastgvcap01.staging.cisco-cms.com'
+    deptype: 'h'
+    folder: 'Hosted Customers'
+    cluster: 'Staging'
+    datastore_cluster: 'Staging-DS'
+    storage_datastore: 'stg-ds-01'
+    storage_path: ''
+
+  RTP-Staging-Build:
+    vsphere: 'sastgvcap01.staging.cisco-cms.com'
+    deptype: 'a'
+    folder: ''
+    cluster: ''
+    datastore_cluster: ''
+    storage_datastore: ''
+    storage_path: ''
+
+  PAE-HX-DC:
+    vsphere: 'paevcenter01.cisco-pae.com'
+    deptype: 'h'
+    folder: 'HX Hosted'
+    cluster: 'PAE-RTP-HX'
+    datastore_cluster: 'HX-Datastore-Cluster'
+    storage_datastore: 'HX-DS-02'
+    storage_path: ''
+
+  PAE-External:
+    vsphere: 'paexvcsa01.exrtp-pae.test'
+    deptype: 'a'
+    folder: ''
+    cluster: ''
+    datastore_cluster: ''
+    storage_datastore: ''
+    storage_path: ''
+
+  Dev Engineering:
+    vsphere: 'paevcenter01.cisco-pae.com'
+    deptype: 'a'
+    folder: 'Deven'
+    cluster: 'CDRA-Integ'
+    datastore_cluster: ''
+    storage_datastore: ''
+    storage_path: ''
+
+  cdra-Build-Development:
+    vsphere: 'paevcenter03.cisco-pae.com'
+    deptype: 'a'
+    folder: ''
+    cluster: ''
+    datastore_cluster: ''
+    storage_datastore: ''
+    storage_path: ''
+
+  PAE-Customer-Build:
+    vsphere: 'paevcenter03.cisco-pae.com'
+    deptype: 'a'
+    folder: ''
+    cluster: ''
+    datastore_cluster: ''
+    storage_datastore: ''
+    storage_path: ''
+
+  RTP5:
+    vsphere: 'rtp5vcsap01.cisco-cms.com'
+    deptype: 'h'
+    folder: 'Hosted Solution'
+    cluster: 'RTP5 HX Cluster'
+    datastore_cluster: 'RTP5-HX-DS-Cluster'
+    storage_datastore: 'RTP5-HX-DS-01'
+    storage_path: 'Linux'
+
+  Alln1:
+    vsphere: 'alln1vcsap01.cisco-cms.com'
+    deptype: 'h'
+    folder: 'Hosted Solution'
+    cluster: 'HX Cluster'
+    datastore_cluster: 'HX-Cluster-1'
+    storage_datastore: 'ALLN1-HX-DS-01'
+    storage_path: 'Linux'

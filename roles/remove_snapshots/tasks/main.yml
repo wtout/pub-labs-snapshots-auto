@@ -1,0 +1,34 @@
+---
+# Tasks for VM snapshots
+- block:
+  - name: get current date and time
+    ansible.builtin.setup:
+      filter:
+        - 'date_time'
+    run_once: yes
+  - name: get the list of folders
+    community.vmware.vmware_vm_info:
+      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+      validate_certs: no
+    register: reg_folder_list
+    no_log: yes
+    ignore_errors: true
+  - include_tasks:
+      file: task_get_vm_list.yml
+      apply:
+        vars:
+          curr_folder: "{{ folder_item }}"
+    loop: "{{ folder_names|sort|unique }}"
+    loop_control:
+      loop_var: folder_item
+    vars:
+      folder_names: "{{ reg_folder_list.virtual_machines|map(attribute='folder')|list }}"
+  - ansible.builtin.debug:
+      msg:
+        - "{{ snapshots_list|default([]) }}"
+        - "snaps_number = {{ snapshots_counter|default(0) }}"
+  delegate_to: localhost
+  run_once: yes
+  tags: ['always', 'remove_snapshots']
