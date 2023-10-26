@@ -69,7 +69,7 @@ The list of roles used in the playbooks:
 
   - **define_inventory**: generates the system inventory from the system definition file
   - **check_creds**: validates the user's credentials
-  - **remove_snapshots**: removes VM snapshots older than 3 days
+  - **remove_snapshots**: removes VM snapshots older than defined max_age
   - **notify**: sends a notification via Webex Teams channel indicating the status of the activity
 
 
