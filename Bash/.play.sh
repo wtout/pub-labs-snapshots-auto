@@ -784,6 +784,7 @@ else
 	run_playbook "${@}"
 	stop_container
 	disable_logging
+	sleep 10
 	start_container &>/dev/null
 	send_notification "${ORIG_ARGS}"
 	stop_container &>/dev/null

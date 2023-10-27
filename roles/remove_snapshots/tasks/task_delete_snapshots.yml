@@ -12,9 +12,13 @@
       validate_certs: no
     register: reg_guest_info
     no_log: yes
+  - name: initialize snapshots IDs list
+    ansible.builtin.set_fact:
+      snapshots_ids: []
   - name: define list of snapshots found
     ansible.builtin.set_fact:
       snapshots_list: "{{ snapshots_list|default([]) + [curr_folder + ': ' + curr_vm + ': ' + snapshot_item.name] }}"
+      snapshots_ids: "{{ snapshots_ids + [snapshot_item.id] }}"
     when:
       - reg_guest_info.instance.snapshots != []
       - (ansible_date_time.date|to_datetime('%Y-%m-%d') - snapshot_item.creation_time|split('T')|first|to_datetime('%Y-%m-%d')).days|int >= datacenter.primary.max_age
@@ -22,6 +26,14 @@
     loop_control:
       loop_var: snapshot_item
       label: "{{ snapshot_item }}"
+  - include_tasks:
+      file: task_get_snapshots_size.yml
+      apply:
+        vars:
+          snaps_ids: "{{ snapshots_ids }}"
+  - name: update the disk space recovered
+    ansible.builtin.set_fact:
+      snapshots_size: "{{ snapshots_size|default(0)|int + snaps_size|int }}"
   - name: update number of snapshots found
     ansible.builtin.set_fact:
       snapshots_counter: "{{ snapshots_counter|default(0)|int + 1 }}"

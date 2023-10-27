@@ -22,8 +22,10 @@
     loop_control:
       loop_var: line_item
   - name: Get number of snapshots from {{ LFILE }}
-    ansible.builtin.shell: grep 'snaps_number = ' {{ LFILE }} | sed 's/"//g' || echo 'Number of snapshots not found'
-    register: reg_snaps_number
+    ansible.builtin.shell: |
+      grep 'snaps_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of snapshots not found'
+      grep 'snaps_size = ' {{ LFILE }} | sed 's/"//g' || echo 'Size of snapshots not found'
+    register: reg_snaps
   - name: Get user's identity
     shell: head -4 {{ LFILE }}
     register: userid
@@ -50,7 +52,9 @@
       - ' '
       - "{{ userid.stdout.split('\n') | join('<br/>') | replace ('This script was run', 'Job started') | replace ('#', '') | regex_replace ('(Machine )([a-z]+.[a-z]+)( [0-9])', '\\1**`\\2`**\\3') | replace('<br/>An', 'An') }}"
       - "**`{{ playbook_dir.split('/')[-2] }}`** Script **`{{ SNAME }} {{ SARG | replace ('dash', '-') | replace ('*', '') }}`** completed {{ 'successfully' if (fe == '' and playbook_status.stdout != 'No Play Recap found') else 'with **`errors`**:' }}{{ ' in ' + '`' + playbook_time + '`' if playbook_execution.stdout is not search('found') else '' }}"
-      - "{{ user_abort.stdout if user_abort is succeeded else 'Number of VM snapshots deleted = ' + reg_snaps_number.stdout|split('= ')|last|string if reg_snaps_number.stdout is not search('not found') else '' }}"
+      - "{{ 'Number of VM snapshots deleted = ' + reg_snaps.stdout_lines|first|split('= ')|last|string if reg_snaps.stdout_lines|first is not search('not found') else '' }}"
+      - "{{ 'Disk space recovered = ' + reg_snaps.stdout_lines|last|split('= ')|last|string if reg_snaps.stdout_lines|last is not search('not found') else '' }}"
+      - "{{ user_abort.stdout if user_abort is succeeded else '' }}"
       - "{{ playbook_status.stdout | regex_replace ('[\\*]*', '') | regex_replace ('[^\\.]* PLAY RECAP', '**PLAY RECAP**\n') | regex_replace ('((unreachable=|failed=)[1-9]+)', '**`\\1`**') | regex_replace ('\n.*[\\|] ', '\n') if (fe != '' or playbook_status.stdout == 'No Play Recap found') else '' }}"
       - ''
       - "The log file is **`{{ AUTOHOME }}/Logs/{{ LFILE|basename }}`**"
