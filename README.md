@@ -23,11 +23,11 @@ On a newly installed Linux **CentOS 7.7+/AlmaLinux8+** VM that has docker instal
 
 6- Download the Ansible automation package
 
-    $> git clone https://wwwin-github.cisco.com/cms-pae/pae-labs-remove-snapshots.git
+    $> git clone https://wwwin-github.cisco.com/cms-pae/pae-labs-snapshots-auto.git
 
 7- Go to the newly cloned pae-labs-linux-auto directory
 
-    $> cd pae-labs-remove-snapshots
+    $> cd pae-labs-snapshots-auto
 
 ***Note**: you might need to disable the proxy to be able to clone the repository*
 
@@ -43,14 +43,14 @@ The system definition file consists of the following variables:
   - **datacenter.primary.name** (_String_): Required. Primary Datacenter name
   - **datacenter.primary.max_age** (_Integer_): Required. Snapshots maximum age
 
-To create the system inventory without deploying the system, issue the following command from the automation root directory (pae-labs-remove-snapshots):
+To create the system inventory without deploying the system, issue the following command from the automation root directory (pae-labs-snapshots-auto):
 
     $> sh Bash/play_deploy.sh --envname <system-name> --tags none
 
 
 ### System Deployment ###
 
-1- From the automation root directory (pae-labs-remove-snapshots), run the bash script under the Bash directory.
+1- From the automation root directory (pae-labs-snapshots-auto), run the bash script under the Bash directory.
 
     $> sh Bash/play_deploy.sh --envname <system-name>
 
