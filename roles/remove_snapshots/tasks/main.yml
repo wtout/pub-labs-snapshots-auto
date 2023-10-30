@@ -32,4 +32,4 @@
         - "snaps_size = {{ ('%0.2f'|format(snapshots_size|float / 1024|pow(4)))|string + ' TiB' if (snapshots_size|int)|string|length > 12 else ('%0.2f'|format(snapshots_size|float / 1024|pow(3)))|string + ' GiB' if (snapshots_size|int)|string|length > 9 else ('%0.2f'|format(snapshots_size|float / 1024|pow(2)))|string + ' MiB' }}"
   delegate_to: localhost
   run_once: yes
-  tags: ['always', 'remove_snapshots']
+  tags: ['remove_snapshots']

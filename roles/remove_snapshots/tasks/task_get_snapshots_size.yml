@@ -1,29 +1,14 @@
 ---
 # Tasks to get the size of a VM snapshot
 - block:
-  - name: get snapshots info for {{ curr_vm }} in {{ curr_folder }}
-    community.vmware.vmware_guest_info:
-      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
-      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
-      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
-      folder: "{{ curr_folder }}"
-      name: "{{ curr_vm }}"
-      schema: 'vsphere'
-      properties: [
-        "layoutEx.file"
-      ]
-      validate_certs: no
-    register: reg_snaps_info
-    no_log: yes
   - name: Initialize the size of the snapshots
     ansible.builtin.set_fact:
       snaps_size: 0
-  - name: define the size of the snapshots
+  - name: define the size of the snapshots found on {{ curr_vm }}
     ansible.builtin.set_fact:
       snaps_size: "{{ snaps_size|int + file_item.size|int }}"
     when: file_item.name is regex('-Snapshot(' + snaps_ids|join('|') + ')')
     loop: "{{ reg_snaps_info.instance.layoutEx.file }}"
     loop_control:
       loop_var: file_item
-  tags: ['always', 'remove_snapshots']
+  tags: ['remove_snapshots']

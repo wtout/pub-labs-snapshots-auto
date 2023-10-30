@@ -26,14 +26,36 @@
     loop_control:
       loop_var: snapshot_item
       label: "{{ snapshot_item }}"
+  - name: get snapshots info for {{ curr_vm }} in {{ curr_folder }}
+    community.vmware.vmware_guest_info:
+      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+      folder: "{{ curr_folder }}"
+      name: "{{ curr_vm }}"
+      schema: 'vsphere'
+      properties: [
+        "config.createDate",
+        "layoutEx.file"
+      ]
+      validate_certs: no
+    register: reg_snaps_info
+    no_log: yes
+    when:
+      - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list == [] or snapshots_ids != []
+  - include_tasks: task_update_attribute.yml
+    when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join == ''
   - include_tasks:
       file: task_get_snapshots_size.yml
       apply:
         vars:
           snaps_ids: "{{ snapshots_ids }}"
+    when:
+      - snapshots_ids != []
   - name: update the disk space recovered
     ansible.builtin.set_fact:
-      snapshots_size: "{{ snapshots_size|default(0)|int + snaps_size|int }}"
+      snapshots_size: "{{ snapshots_size|default(0)|int + snaps_size|default(0)|int }}"
   - name: update number of snapshots found
     ansible.builtin.set_fact:
       snapshots_counter: "{{ snapshots_counter|default(0)|int + 1 }}"
@@ -63,4 +85,4 @@
     loop_control:
       loop_var: snapshot_item
       label: "{{ snapshot_item }}"
-  tags: ['always', 'remove_snapshots']
+  tags: ['remove_snapshots']

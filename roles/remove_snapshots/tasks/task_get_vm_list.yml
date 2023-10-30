@@ -23,4 +23,4 @@
       loop_var: vm_item
     vars:
       vm_names: "{{ reg_vm_list.virtual_machines|map(attribute='guest_name')|list }}"
-  tags: ['always', 'remove_snapshots']
+  tags: ['remove_snapshots']

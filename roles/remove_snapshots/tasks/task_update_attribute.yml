@@ -1,0 +1,25 @@
+---
+# Tasks to update the VM's date-created attribute
+- name: update date-created attribute
+  block:
+    - name: Update date-created attribute for {{ curr_vm }}
+      community.vmware.vmware_guest_custom_attributes:
+        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+        datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+        folder: "{{ curr_folder }}"
+        name: "{{ curr_vm }}"
+        state: present
+        attributes:
+          - name: date-created
+            value: "{{ reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join }}"
+        validate_certs: no
+      register: reg_add_attribute
+  rescue:
+    - ansible.builtin.debug:
+        msg:
+          - 'The automation user does not have sufficient privileges to modify custom attributes'
+      when:
+        - reg_add_attribute.module_stderr is search('Permission to perform this operation was denied')
+  tags: ['remove_snapshots']
