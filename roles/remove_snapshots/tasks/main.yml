@@ -11,20 +11,27 @@
       hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
       username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
       password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+      vm_type: vm
       validate_certs: no
-    register: reg_folder_list
+    register: reg_vm_list
     no_log: yes
-    ignore_errors: true
+  - name: define list of VMs
+    ansible.builtin.set_fact:
+      vm_list: "{{ vm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name}] }}"
+      when: vm_item.guest_name is not search('on-decomm-list')
+    loop: "{{ reg_vm_list.virtual_machines }}"
+    loop_control:
+      loop_var: vm_item
+      label: "{{ vm_item.guest_name }}"
   - include_tasks:
-      file: task_get_vm_list.yml
+      file: task_delete_snapshots.yml
       apply:
         vars:
-          curr_folder: "{{ folder_item }}"
-    loop: "{{ folder_names|sort|unique }}"
+          curr_folder: "{{ vm_item.vm_folder }}"
+          curr_vm: "{{ vm_item.vm_name }}"
+    loop: "{{ vm_list }}"
     loop_control:
-      loop_var: folder_item
-    vars:
-      folder_names: "{{ reg_folder_list.virtual_machines|map(attribute='folder')|list }}"
+      loop_var: vm_item
   - ansible.builtin.debug:
       msg:
         - "{{ snapshots_list|default([]) }}"
