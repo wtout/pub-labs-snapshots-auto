@@ -46,6 +46,9 @@
       - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list == [] or snapshots_ids != []
   - include_tasks: task_update_attribute.yml
     when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join == ''
+  - name: Initialize the size of the snapshots
+    ansible.builtin.set_fact:
+      snaps_size: 0
   - include_tasks:
       file: task_get_snapshots_size.yml
       apply:

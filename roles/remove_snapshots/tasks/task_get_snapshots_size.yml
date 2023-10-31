@@ -1,9 +1,6 @@
 ---
 # Tasks to get the size of a VM snapshot
 - block:
-  - name: Initialize the size of the snapshots
-    ansible.builtin.set_fact:
-      snaps_size: 0
   - name: define the size of the snapshots found on {{ curr_vm }}
     ansible.builtin.set_fact:
       snaps_size: "{{ snaps_size|int + file_item.size|int }}"
