@@ -756,9 +756,9 @@ if [[ -z ${MYINVOKER+x} ]]
 then
 	get_repo_creds "${REPOVAULT}" Bash/get_repo_vault_pass.sh
 	check_updates "${REPOVAULT}" Bash/get_repo_vault_pass.sh
-	CHECK_UPDATE_STATUS= ${?}
+	CHECK_UPDATE_STATUS=${?}
 else
-	CHECK_UPDATE_STATUS= 0
+	CHECK_UPDATE_STATUS=0
 fi
 if [[ ${CHECK_UPDATE_STATUS} -eq 3 ]]
 then
