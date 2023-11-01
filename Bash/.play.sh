@@ -617,11 +617,6 @@ function get_hostsinplay() {
 	hip=$($(docker_cmd) exec -i ${CONTAINERNAME} ansible "${1}" -i "${INVENTORY_PATH}" -m debug -a msg="{{ ansible_play_hosts }}" | grep -Ev "\[|\]|\{|\}" | sort -u)
 	echo ${hip}
 }
-function get_hostsinplay() {
-	local hip
-	hip=$(ansible "${1}" -i "${INVENTORY_PATH}" -m debug -a msg="{{ ansible_play_hosts }}" | grep -Ev "\[|\]|\{|\}" | sort -u)
-	echo ${hip}
-}
 
 function check_mode() {
 	[[ "$(echo "${@}" | grep -Ew '\-\-check')" != "" ]] && echo " in check mode " || echo " "
