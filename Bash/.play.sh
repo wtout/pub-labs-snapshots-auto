@@ -193,7 +193,7 @@ function stop_container() {
 }
 
 function check_repeat_job() {
-	ps aux | grep -w "${ENAME}" | grep -vwE "${PID}|grep"
+	ps -ef | grep -w "${ENAME}" | grep "Bash/play_" | grep -vwE "${PID}|grep" | grep -vw 'cd'
 	return ${?}
 }
 
@@ -723,7 +723,6 @@ USER_ACCTS="svc r labsadmin appadmin infrabuild"
 PID="${$}"
 add_user_uid_gid
 add_user_docker_group
-[[ "$(get_os)" == "AlmaLinux"* ]] && podman system migrate
 create_dir "${ANSIBLE_LOG_LOCATION}"
 check_arguments "${@}"
 check_docker_login
@@ -753,9 +752,15 @@ PROXY_ADDRESS=$(get_proxy) || PA=${?}
 [[ ${PA} -eq 1 ]] && echo -e "\n${PROXY_ADDRESS}\n" && exit ${PA}
 [[ ${debug} == 1 ]] && set -x
 add_write_permission ${PWD}/vars
-get_repo_creds "${REPOVAULT}" Bash/get_repo_vault_pass.sh
-check_updates "${REPOVAULT}" Bash/get_repo_vault_pass.sh
-if [[ ${?} -eq 3 ]]
+if [[ -z ${MYINVOKER+x} ]]
+then
+	get_repo_creds "${REPOVAULT}" Bash/get_repo_vault_pass.sh
+	check_updates "${REPOVAULT}" Bash/get_repo_vault_pass.sh
+	CHECK_UPDATE_STATUS= ${?}
+else
+	CHECK_UPDATE_STATUS= 0
+fi
+if [[ ${CHECK_UPDATE_STATUS} -eq 3 ]]
 then
     stop_container
     return 1
