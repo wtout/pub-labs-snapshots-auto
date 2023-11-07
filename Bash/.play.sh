@@ -718,6 +718,7 @@ USER_ACCTS="svc r labsadmin appadmin infrabuild"
 PID="${$}"
 add_user_uid_gid
 add_user_docker_group
+[[ "$(get_os)" == "AlmaLinux"* ]] && [[ "$($(docker_cmd) images|grep -vi tag)" == "" ]] && podman system migrate
 create_dir "${ANSIBLE_LOG_LOCATION}"
 check_arguments "${@}"
 check_docker_login
