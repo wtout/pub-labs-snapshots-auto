@@ -89,7 +89,7 @@ function check_docker_login() {
 		CentOS*)
 			MYJSONFILE=${AUTHFILE}
 			;;
-		AlmaLinux*)
+		AlmaLinux*|Ubuntu*)
 			MYJSONFILE=${XDG_RUNTIME_DIR}/containers/auth.json
 			;;
 		*)
@@ -131,7 +131,7 @@ function docker_cmd() {
 				echo "docker"
 			fi
 			;;
-		AlmaLinux*)
+		AlmaLinux*|Ubuntu*)
 			echo "docker"
 			;;
 		*)
@@ -302,7 +302,7 @@ function get_proxy() {
 	local PUBLIC_ADDRESS
 	chmod +x Bash/get*
 	grep -r '^proxy.*:.*@*' /etc/environment /etc/profile /etc/profile.d/ ~/.bashrc ~/.bash_profile &>/dev/null && [[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
-	MYPROXY=$(grep -r "^proxy.*=.*" /etc/environment /etc/profile /etc/profile.d/ ~/.bashrc ~/.bash_profile | cut -d '"' -f2 | uniq)
+	MYPROXY=$(grep -rh "^proxy.*=.*" /etc/environment /etc/profile /etc/profile.d/ ~/.bashrc ~/.bash_profile 2>/dev/null | cut -d '"' -f2 | uniq)
 	[[ "${MYPROXY}" != "" ]] && [[ "$(echo "${MYPROXY}" | grep http)" == "" ]] && MYPROXY=http://${MYPROXY}
 	PUBLIC_ADDRESS="https://time.google.com"
 	if [[ "${MYPROXY}" == "" ]]
@@ -391,7 +391,7 @@ function get_creds_prefix() {
 function get_creds() {
 	if [[ $(get_creds_prefix ${1}) ]]
 	then
-		view_vault vars/passwords.yml Bash/get_common_vault_pass.sh | grep ^$(get_creds_prefix ${1}) | sed "s/'//g"
+		view_vault ${PASSVAULT} Bash/get_common_vault_pass.sh | grep ^$(get_creds_prefix ${1}) | sed "s/'//g"
 		return 0
 	else
 		return 1
@@ -668,11 +668,11 @@ function run_playbook() {
 		EVARGS="{SVCFILE: '${SVCVAULT}', $(echo "${0}" | sed -e 's/.*play_\(.*\)\.sh/\1/'): true}"
 		if [[ -z ${MYINVOKER+x} ]]
 		then
-			$(docker_cmd) exec -it ${CONTAINERNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${PASSVAULT}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${@} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
+			$(docker_cmd) exec -it ${CONTAINERNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${@} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
 		else
-			$(docker_cmd) exec -it ${CONTAINERNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${PASSVAULT}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${@} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr 1>/dev/null
+			$(docker_cmd) exec -it ${CONTAINERNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${@} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr 1>/dev/null
 		fi
-		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr | grep  "${PASSVAULT}") != "" ]] && echo -e "\nUnable to decrypt ${BOLD}${PASSVAULT}${NORMAL}" && EC=1
+		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr | grep  "${SVCVAULT}") != "" ]] && echo -e "\nUnable to decrypt ${BOLD}${SVCVAULT}${NORMAL}" && EC=1
 		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr | grep "${CRVAULT}") != "" ]] && echo -e "\nUnable to decrypt ${BOLD}${CRVAULT}${NORMAL}" && rm -f "${CRVAULT}" && EC=1
 		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr) == "" ]] && [[ $(grep -i warning "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr) == '' ]] && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
 		rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
@@ -696,7 +696,8 @@ function send_notification() {
 	then
 		SCRIPT_ARG="${@//-/dash}"
 		# Send playbook status notification
-		$(docker_cmd) exec -it ${CONTAINERNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}', NHOSTS: '${NUM_HOSTSINPLAY}'}" --tags notify -e @"${PASSVAULT}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{AUTOHOME: '${PWD}'}" -v &>/dev/null
+		NOTIF_ARGS=$(echo "${@}" | tr ' ' '\n' | sed -e '/--tags\|-t\|--limit\|-l\|--envname/,+1d' | tr '\n' ' ')
+		$(docker_cmd) exec -it ${CONTAINERNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}', NHOSTS: '${NUM_HOSTSINPLAY}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{AUTOHOME: '${PWD}'}" ${NOTIF_ARGS} -v &>/dev/null
 		SCRIPT_STATUS=${?}
 	fi
 }
@@ -712,13 +713,12 @@ PASSVAULT="vars/passwords.yml"
 REPOVAULT="vars/.repovault.yml"
 CONTAINERWD="/home/ansible/$(basename ${PWD})"
 CONTAINERREPO="containers.cisco.com/watout/ansible"
-USER_ACCTS="svc r labsadmin appadmin infrabuild"
 
 # Main
 PID="${$}"
 add_user_uid_gid
 add_user_docker_group
-[[ "$(get_os)" == "AlmaLinux"* ]] && [[ "$($(docker_cmd) images|grep -vi tag)" == "" ]] && podman system migrate
+[[ "$(get_os)" == "AlmaLinux"* || "$(get_os)" == "Ubuntu"* ]] && [[ "$($(docker_cmd) images|grep -vi tag)" == "" ]] && podman system migrate
 create_dir "${ANSIBLE_LOG_LOCATION}"
 check_arguments "${@}"
 check_docker_login
@@ -763,11 +763,7 @@ then
 else
 	[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 	rm -f "${SVCVAULT}"; umask 0022; touch "${SVCVAULT}"
-	for c in ${USER_ACCTS}
-	do
-		select_creds primary ${c} user "${PCREDS_LIST[@]}" 1>/dev/null && echo -e "P${c^^}_USER: '$(select_creds primary ${c} user "${PCREDS_LIST[@]}")'" >> "${SVCVAULT}"
-		select_creds primary ${c} pass "${PCREDS_LIST[@]}" 1>/dev/null && echo -e "P${c^^}_PASS: '$(select_creds primary ${c} pass "${PCREDS_LIST[@]}")'" >> "${SVCVAULT}"
-	done
+	[[ "$(echo ${PCREDS_LIST})" != "" ]] && echo "${PCREDS_LIST[@]}" | sed "s/$(get_creds_prefix primary)/P/g; s/^\(.*: \)\(.*\)$/\1'\2'/g" >> "${SVCVAULT}"
 	[[ ${debug} == 1 ]] && set -x
 	add_write_permission "${SVCVAULT}"
 	encrypt_vault "${SVCVAULT}" Bash/get_common_vault_pass.sh
