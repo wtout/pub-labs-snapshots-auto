@@ -18,6 +18,10 @@
       problematic_list: "{{ problematic_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
     when: reg_guest_info is failed
   - block:
+    - name: define list of offline VMs
+      ansible.builtin.set_fact:
+        offline_list: "{{ offline_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+      when: reg_guest_info.instance.hw_power_status == 'poweredOff'
     - name: initialize snapshots IDs list
       ansible.builtin.set_fact:
         snapshots_ids: []

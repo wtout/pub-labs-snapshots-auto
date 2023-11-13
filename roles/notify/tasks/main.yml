@@ -24,6 +24,7 @@
   - name: Get number of snapshots from {{ LFILE }}
     ansible.builtin.shell: |
       grep 'faulties_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of faulty VMs not found'
+      grep 'offlines_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of offline VMs not found'
       grep 'snaps_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of snapshots not found'
       grep 'snaps_size = ' {{ LFILE }} | sed 's/"//g' || echo 'Size of snapshots not found'
     register: reg_numbers
@@ -53,8 +54,10 @@
       - ' '
       - "{{ userid.stdout.split('\n') | join('<br/>') | replace ('This script was run', 'Job started') | replace ('#', '') | regex_replace ('(Machine )([a-z]+.[a-z]+)( [0-9])', '\\1**`\\2`**\\3') | replace('<br/>An', 'An') }}"
       - "**`{{ playbook_dir.split('/')[-2] }}`** Script **`{{ SNAME }} {{ SARG | replace ('dash', '-') | replace ('*', '') }}`** completed {{ 'successfully' if (fe == '' and playbook_status.stdout != 'No Play Recap found') else 'with **`errors`**:' }}{{ ' in ' + '`' + playbook_time|default('1s') + '`' if playbook_execution.stdout is not search('found') else '' }}"
+      - ''
       - "{{ 'Number of faulty VMs = ' + reg_numbers.stdout_lines|first|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines|first is not search('not found') else '' }}"
-      - "{{ 'Number of VM snapshots deleted = ' + reg_numbers.stdout_lines[1]|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines[1] is not search('not found') else '' }}"
+      - "{{ 'Number of offline VMs = ' + reg_numbers.stdout_lines[1]|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines[1] is not search('not found') else '' }}"
+      - "{{ 'Number of VM snapshots deleted = ' + reg_numbers.stdout_lines[2]|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines[2] is not search('not found') else '' }}"
       - "{{ 'Disk space recovered = ' + reg_numbers.stdout_lines|last|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines|last is not search('not found') else '' }}"
       - "{{ user_abort.stdout if user_abort is succeeded else '' }}"
       - "{{ playbook_status.stdout | regex_replace ('[\\*]*', '') | regex_replace ('[^\\.]* PLAY RECAP', '**PLAY RECAP**\n') | regex_replace ('((unreachable=|failed=)[1-9]+)', '**`\\1`**') | regex_replace ('\n.*[\\|] ', '\n') if (fe != '' or playbook_status.stdout == 'No Play Recap found') else '' }}"
