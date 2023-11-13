@@ -45,14 +45,14 @@ The system definition file consists of the following variables:
 
 To create the system inventory without deploying the system, issue the following command from the automation root directory (pae-labs-snapshots-auto):
 
-    $> sh Bash/play_deploy.sh --envname <system-name> --tags none
+    $> bash Bash/play_deploy.sh --envname <system-name> --tags none
 
 
 ### System Deployment ###
 
 1- From the automation root directory (pae-labs-snapshots-auto), run the bash script under the Bash directory.
 
-    $> sh Bash/play_deploy.sh --envname <system-name>
+    $> bash Bash/play_deploy.sh --envname <system-name>
 
 with the _``system-name``_ being the name of the system definition file from "System Definition"
 
