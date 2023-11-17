@@ -89,8 +89,11 @@ function check_docker_login() {
 		CentOS*)
 			MYJSONFILE=${AUTHFILE}
 			;;
-		AlmaLinux*|Ubuntu*)
+		AlmaLinux*)
 			MYJSONFILE=${XDG_RUNTIME_DIR}/containers/auth.json
+			;;
+		Ubuntu*)
+			MYJSONFILE=${HOME}/.podman/auth.json
 			;;
 		*)
 			;;
@@ -102,9 +105,14 @@ function check_docker_login() {
 			LOGGEDIN=false
 		fi
 	else
-		if [[ ! -f ${AUTHFILE} || "$(grep ${MYDOMAIN} ${AUTHFILE})" == "" ]] && [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
+		if [[ -z ${REGISTRY_AUTH_FILE+x} ]]
 		then
-			LOGGEDIN=false
+			if [[ ! -f ${AUTHFILE} || "$(grep ${MYDOMAIN} ${AUTHFILE})" == "" ]] && [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
+			then
+				LOGGEDIN=false
+			fi
+		else
+			[[ $(podman login --get-login ${MYDOMAIN} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
 		fi
 	fi
 	if [[ "${LOGGEDIN}" == "false" ]]
