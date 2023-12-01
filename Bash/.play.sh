@@ -112,7 +112,13 @@ function check_docker_login() {
 				LOGGEDIN=false
 			fi
 		else
-			[[ $(podman login --get-login ${MYDOMAIN} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
+			if [[ ! -f ${REGISTRY_AUTH_FILE} ]]
+			then
+				unset REGISTRY_AUTH_FILE
+				LOGGEDIN=false
+			else
+				[[ $(podman login --get-login ${MYDOMAIN} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
+			fi
 		fi
 	fi
 	if [[ "${LOGGEDIN}" == "false" ]]
