@@ -13,7 +13,7 @@
         state: present
         attributes:
           - name: date-created
-            value: "{{ reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join }}"
+            value: "{{ reg_snaps_info.instance.config.createDate|split('T')|first }}"
         validate_certs: no
       register: reg_add_attribute
   rescue:
