@@ -51,6 +51,7 @@
         ]
         validate_certs: no
       register: reg_snaps_info
+      until: reg_snaps_info.instance.config.createDate is search('T')
       no_log: yes
       when:
         - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list == [] or snapshots_ids != []
