@@ -9,7 +9,7 @@
         password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
         datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
         folder: "{{ curr_folder }}"
-        name: "{{ curr_vm }}"
+        uuid: "{{ curr_uuid }}"
         state: present
         attributes:
           - name: date-created

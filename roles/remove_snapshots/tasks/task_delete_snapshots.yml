@@ -8,7 +8,7 @@
       password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
       datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
       folder: "{{ curr_folder }}"
-      name: "{{ curr_vm }}"
+      uuid: "{{ curr_uuid }}"
       validate_certs: no
     register: reg_guest_info
     no_log: yes
@@ -43,7 +43,7 @@
         password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
         datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
         folder: "{{ curr_folder }}"
-        name: "{{ curr_vm }}"
+        uuid: "{{ curr_uuid }}"
         schema: 'vsphere'
         properties: [
           "config.createDate",
@@ -54,7 +54,7 @@
       until: reg_snaps_info.instance.config.createDate is search('T')
       no_log: yes
       when:
-        - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list == [] or snapshots_ids != []
+        - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join == '' or snapshots_ids != []
     - include_tasks: task_update_attribute.yml
       when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join == ''
     - name: Initialize the size of the snapshots
