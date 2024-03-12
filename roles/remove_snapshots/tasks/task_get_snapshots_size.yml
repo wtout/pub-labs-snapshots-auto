@@ -8,4 +8,3 @@
     loop: "{{ reg_snaps_info.instance.layoutEx.file }}"
     loop_control:
       loop_var: file_item
-  tags: ['remove_snapshots']

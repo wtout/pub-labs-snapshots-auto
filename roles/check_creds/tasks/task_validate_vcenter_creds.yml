@@ -16,4 +16,3 @@
       err_msg: "{{ vcenter_host }}: {{ vcenter_creds.msg }}"
     when:
       - vcenter_creds is failed
-  tags: always

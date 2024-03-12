@@ -100,4 +100,3 @@
         loop_var: snapshot_item
         label: "{{ snapshot_item }}"
     when: reg_guest_info is succeeded
-  tags: ['remove_snapshots']

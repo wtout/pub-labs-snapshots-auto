@@ -22,4 +22,3 @@
           - 'The automation user does not have sufficient privileges to modify custom attributes'
       when:
         - reg_add_attribute.module_stderr is search('Permission to perform this operation was denied')
-  tags: ['remove_snapshots']
