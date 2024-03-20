@@ -378,7 +378,7 @@ function get_creds_prefix() {
     local DATACENTER
     local CREDS_PREFIX
 	[[ -f "${SYS_DEF}" ]] && FILETOCHECK="${SYS_DEF}" || FILETOCHECK="${SYS_ALL}"
-	DATACENTER=$(cat "${FILETOCHECK}" | sed "/^$/d" | grep -A32 -P "^datacenter:$" | sed -n "/${1}:/,+2p" | sed -n "/name:/,1p" | awk -F ': ' '{print $NF}' | sed "s/'//g")
+	DATACENTER=$(cat "${FILETOCHECK}" | sed "/^\s*$/d" | grep -A22 -P "^datacenter:$" | sed -n "/${1}:/,+2p" | sed -n "/name:/,1p" | awk -F ': ' '{print $NF}' | sed "s/'//g")
 	if [[ "${?}" == "0" ]] && [[ "${DATACENTER}" != "" ]] && [[ "${DATACENTER}" != "''" ]]
 	then
 		case ${DATACENTER} in
@@ -561,7 +561,7 @@ function check_updates() {
 					[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 					REPOPWD="${REPOPASS//@/%40}"
 					[[ "$(git config --get remote.origin.url | grep '\/\/.*@')" == "" ]] && REMOTEURL=$(git config --get remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}:${REPOPWD}@\1|") || REMOTEURL=$(git config --get remote.origin.url | sed -e "s|//.*@|//${REPOUSER}:${REPOPWD}@|")
-					REMOTEID=$([[ ${SET_PROXY} ]] && export https_proxy=${PROXY_ADDRESS}; git ls-remote "${REMOTEURL}" refs/heads/"${localbranch}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr | cut -c1-7)
+					REMOTEID=$([[ ${SET_PROXY} ]] && export https_proxy=${PROXY_ADDRESS}; timeout 15 git ls-remote "${REMOTEURL}" refs/heads/"${localbranch}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr | cut -c1-7)
 					[[ ${debug} == 1 ]] && set -x
 					[[ ${REMOTEID} == "" ]] && sleep 3 || break
 				done
@@ -591,11 +591,11 @@ function check_updates() {
 					then
 						git reset -q --hard origin/"${localbranch}"
 						git pull "$(git config --get remote.origin.url | sed -e "s|\(//.*\)@|\1:${REPOPASS}@|")" "${localbranch}" &>"${PWD}"/.pullerr && sed -i "s|${REPOPASS}|xxxxx|" "${PWD}"/.pullerr
-                        [[ ${?} == 0 ]] && echo -e "\nThe installation package has been updated. ${BOLD}Please re-run the script for the updates to take effect${NORMAL}\n\n" && EC='return 3'
-                        [[ ${?} != 0 ]] && echo -e "\nThe installation package update has failed with the following error:\n\n${BOLD}$(cat "${PWD}"/.pullerr)${NORMAL}\n\n" && EC='exit'
-                        rm -f "${PWD}"/.pullerr
+						[[ ${?} == 0 ]] && echo -e "\nThe installation package has been updated. ${BOLD}Please re-run the script for the updates to take effect${NORMAL}\n\n" && EC='return 3'
+						[[ ${?} != 0 ]] && echo -e "\nThe installation package update has failed with the following error:\n\n${BOLD}$(cat "${PWD}"/.pullerr)${NORMAL}\n\n" && EC='exit'
+						rm -f "${PWD}"/.pullerr
 					else
-						EC='continue'
+						EC=':'
 					fi
 				fi
 				${EC}
@@ -721,7 +721,7 @@ ANSIBLE_CFG="ansible.cfg"
 ANSIBLE_LOG_LOCATION="Logs"
 BOLD=$(tput bold)
 NORMAL=$(tput sgr0)
-ANSIBLE_VERSION='7.7.0'
+ANSIBLE_VERSION='8.7.0'
 ANSIBLE_VARS="vars/datacenters.yml"
 PASSVAULT="vars/passwords.yml"
 REPOVAULT="vars/.repovault.yml"
@@ -757,6 +757,7 @@ check_container && stop_container
 image_prune
 start_container
 [[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
+chmod 644 "${PASSVAULT}"
 PCREDS_LIST=$(get_creds primary)
 PROXY_ADDRESS=$(get_proxy) || PA=${?}
 [[ ${PA} -eq 1 ]] && echo -e "\n${PROXY_ADDRESS}\n" && exit ${PA}
