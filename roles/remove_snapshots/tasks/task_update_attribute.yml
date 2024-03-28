@@ -19,6 +19,9 @@
   rescue:
     - ansible.builtin.debug:
         msg:
-          - 'The automation user does not have sufficient privileges to modify custom attributes'
+          - "The automation user does not have sufficient privileges to modify custom attributes for {{ curr_folder }}/{{ curr_vm }}"
+    - name: define list of non-updated VMs
+      ansible.builtin.set_fact:
+        noupdate_list: "{{ noupdate_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
       when:
         - reg_add_attribute.module_stderr is search('Permission to perform this operation was denied')

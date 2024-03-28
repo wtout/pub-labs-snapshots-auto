@@ -2,7 +2,7 @@
 # Tasks for notify
 - block:
   - name: delete svc acct vault file
-    file:
+    ansible.builtin.file:
       path: "{{ file_item }}"
       state: absent
     loop:
@@ -16,7 +16,7 @@
     ansible.builtin.shell: "grep 'PLAY RECAP' {{ LFILE }} &>/dev/null && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS }}p' | grep -v awk | grep -E 'PLAY RECAP|(unreachable|failed)=[1-9]+' || echo 'No Play Recap found'"
     register: playbook_status
   - name: define execution status
-    set_fact:
+    ansible.builtin.set_fact:
       EXEC_STATUS: "{{ EXEC_STATUS | default ([]) + [((line_item | regex_replace ('^.*[\\|] ', '')).split(' : ')|first).strip()] }}"
     loop: "{{ playbook_status.stdout_lines | select('regex', '(unreachable=|failed=)[1-9]+') }}"
     loop_control:
@@ -25,28 +25,49 @@
     ansible.builtin.shell: |
       grep 'faulties_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of faulty VMs not found'
       grep 'offlines_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of offline VMs not found'
+      grep 'noupdate_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of non-updated VMs not found'
       grep 'snaps_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of snapshots not found'
       grep 'snaps_size = ' {{ LFILE }} | sed 's/"//g' || echo 'Size of snapshots not found'
     register: reg_numbers
   - name: Get user's identity
-    shell: head -4 {{ LFILE }}
+    ansible.builtin.shell: head -4 {{ LFILE }}
     register: userid
   - name: Check if user requested to abort
-    shell: grep "user requested abort!" {{ LFILE }}
+    ansible.builtin.shell: grep "user requested abort!" {{ LFILE }}
     register: user_abort
     ignore_errors: true
   - name: Get playbook execution time from {{ LFILE }}
     ansible.builtin.shell: |
       grep 'PLAY RECAP' {{ LFILE }} &>/dev/null && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep '*' &>/dev/null && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep -E '.[0-9]{,3} \*{3,}' | tail -1 | awk '{print $(NF - 1)}' || echo 'No Execution time found'
     register: playbook_execution
-  - set_fact:
+  - name: define playbook_time
+    ansible.builtin.set_fact:
       playbook_time: "{{ playbook_time|default('') + ' ' + time_item.0|regex_replace('^0*', '') + time_item.1 }}"
     loop: "{{ playbook_execution.stdout.split(':')|zip([ 'h', 'm', 's' ])|list }}"
     loop_control:
       loop_var: time_item
     when: time_item.0|int != 0
-  - set_fact:
-      NOTIF_MSG: "{{ NOTIF_MSG | default ([]) + [item] | list }}"
+  - name: define MSG_STATS
+    ansible.builtin.set_fact:
+      MSG_STATS: "{{ MSG_STATS | default ([]) + [loop_item] }}"
+    when: loop_item != ''
+    loop:
+      - "{{ 'Number of faulty VMs = ' + faulties|string if reg_numbers.stdout != '' and faulties is not search('not found') and faulties|int > 0 else '' }}"
+      - "{{ 'Number of offline VMs = ' + offlines|string if reg_numbers.stdout != '' and offlines is not search('not found') and offlines|int > 0 else '' }}"
+      - "{{ 'Number of non-updated VMs = ' + noupdate|string if reg_numbers.stdout != '' and noupdate is not search('not found') and noupdate|int > 0 else '' }}"
+      - "{{ 'Number of VM snapshots deleted = ' + snapsnum|string if reg_numbers.stdout != '' and snapsnum is not search('not found') and snapsnum|int > 0 else '' }}"
+      - "{{ 'Disk space recovered = ' + snapssize|string if reg_numbers.stdout != '' and snapssize is not search('not found') and snapssize|split|first|float > 0 else '' }}"
+    loop_control:
+      loop_var: loop_item
+    vars:
+      faulties: "{{ reg_numbers.stdout_lines|select('search','faulties_number')|list|join|split('= ')|last }}"
+      offlines: "{{ reg_numbers.stdout_lines|select('search','offlines_number')|list|join|split('= ')|last }}"
+      noupdate: "{{ reg_numbers.stdout_lines|select('search','noupdate_number')|list|join|split('= ')|last }}"
+      snapsnum: "{{ reg_numbers.stdout_lines|select('search','snaps_number')|list|join|split('= ')|last }}"
+      snapssize: "{{ reg_numbers.stdout_lines|select('search','snaps_size')|list|join|split('= ')|last }}"
+  - name: define NOTIF_MSG
+    ansible.builtin.set_fact:
+      NOTIF_MSG: "{{ NOTIF_MSG | default ([]) + [loop_item] | list }}"
     vars:
       fe: "{{ playbook_status.stdout | regex_search('(unreachable=|failed=)[1-9]+') }}"
     loop:
@@ -55,18 +76,17 @@
       - "{{ userid.stdout.split('\n') | join('<br/>') | replace ('This script was run', 'Job started') | replace ('#', '') | regex_replace ('(Machine )([a-z]+.[a-z]+)( [0-9])', '\\1**`\\2`**\\3') | replace('<br/>An', 'An') }}"
       - "**`{{ playbook_dir.split('/')[-2] }}`** Script **`{{ SNAME }} {{ SARG | replace ('dash', '-') | replace ('*', '') }}`** completed {{ 'successfully' if (fe == '' and playbook_status.stdout != 'No Play Recap found') else 'with **`errors`**:' }}{{ ' in ' + '`' + playbook_time|default('1s') + '`' if playbook_execution.stdout is not search('found') else '' }}"
       - ''
-      - "{{ 'Number of faulty VMs = ' + reg_numbers.stdout_lines|first|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines|first is not search('not found') else '' }}"
-      - "{{ 'Number of offline VMs = ' + reg_numbers.stdout_lines[1]|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines[1] is not search('not found') else '' }}"
-      - "{{ 'Number of VM snapshots deleted = ' + reg_numbers.stdout_lines[2]|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines[2] is not search('not found') else '' }}"
-      - "{{ 'Disk space recovered = ' + reg_numbers.stdout_lines|last|split('= ')|last|string if reg_numbers.stdout != '' and reg_numbers.stdout_lines|last is not search('not found') else '' }}"
+      - "{{ MSG_STATS | default([]) | join('\n') }}"
       - "{{ user_abort.stdout if user_abort is succeeded else '' }}"
       - "{{ playbook_status.stdout | regex_replace ('[\\*]*', '') | regex_replace ('[^\\.]* PLAY RECAP', '**PLAY RECAP**\n') | regex_replace ('((unreachable=|failed=)[1-9]+)', '**`\\1`**') | regex_replace ('\n.*[\\|] ', '\n') if (fe != '' or playbook_status.stdout == 'No Play Recap found') else '' }}"
       - ''
       - "The log file is **`{{ AUTOHOME }}/Logs/{{ LFILE|basename }}`**"
       - ''
       - '========================================================='
+    loop_control:
+      loop_var: loop_item
   - name: Send notification via Webex Teams
-    uri:
+    ansible.builtin.uri:
       url: "https://api.ciscospark.com/v1/messages"
       method: POST
       headers:
@@ -78,6 +98,6 @@
     environment:
       http_proxy: "{{ proxy_address|default('') }}"
       https_proxy: "{{ proxy_address|default('') }}"
-  - assert:
+  - ansible.builtin.assert:
       that: EXEC_STATUS|default([]) == []
   tags: [ 'never', 'notify' ]
