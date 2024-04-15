@@ -88,23 +88,24 @@ function check_docker_login() {
 	local AUTHFILE
 	local LOGGEDIN
 	LOGGEDIN=true
-	AUTHFILE=${HOME}/.docker/config.json
+	AUTHFILE1=${HOME}/.docker/config.json
+	AUTHFILE2=${HOME}/.podman/auth.json
 	MYDOMAIN=$(echo ${CONTAINERREPO}|cut -d '/' -f1)
 	MYRELEASE=$(get_os)
 	case ${MYRELEASE} in
 		CentOS*)
-			MYJSONFILE=${AUTHFILE}
+			MYJSONFILE=${AUTHFILE1}
 			;;
 		AlmaLinux*)
 			MYJSONFILE=${XDG_RUNTIME_DIR}/containers/auth.json
 			;;
 		Ubuntu*)
-			MYJSONFILE=${HOME}/.podman/auth.json
+			MYJSONFILE=${AUTHFILE2}
 			;;
 		*)
 			;;
 	esac
-	if [[ ${MYJSONFILE} == ${AUTHFILE} ]]
+	if [[ ${MYJSONFILE} == ${AUTHFILE1} ]]
 	then
 		if [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
 		then
@@ -113,7 +114,7 @@ function check_docker_login() {
 	else
 		if [[ -z ${REGISTRY_AUTH_FILE+x} ]]
 		then
-			if [[ ! -f ${AUTHFILE} || "$(grep ${MYDOMAIN} ${AUTHFILE})" == "" ]] && [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
+			if [[ ! -f ${AUTHFILE1} || "$(grep ${MYDOMAIN} ${AUTHFILE1})" == "" ]] && [[ ! -f ${AUTHFILE2} || "$(grep ${MYDOMAIN} ${AUTHFILE2})" == "" ]] && [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
 			then
 				LOGGEDIN=false
 			fi
@@ -123,7 +124,7 @@ function check_docker_login() {
 				unset REGISTRY_AUTH_FILE
 				LOGGEDIN=false
 			else
-				[[ $(podman login --get-login ${MYDOMAIN} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
+				[[ $(podman login --get-login ${MYDOMAIN} &>/dev/null; echo "${?}") -ne 0 ]] && [[ $(podman login --get-login ${MYDOMAIN} --authfile ${AUTHFILE2} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
 			fi
 		fi
 	fi
@@ -174,7 +175,7 @@ function image_prune() {
 	local IIDLIST
 	CIID=$($(docker_cmd) images | grep -E "${CONTAINERREPO}.*${ANSIBLE_VERSION}" | awk '{print $3}')
 	[[ "${CIID}" == "" ]] && IIDLIST=$($(docker_cmd) images -a -q) || IIDLIST=$($(docker_cmd) images -a -q | grep -v ${CIID})
-	[[ "${IIDLIST}" != "" ]] && $(docker_cmd) rmi ${IIDLIST}
+	[[ "${IIDLIST}" != "" ]] && $(docker_cmd) rmi ${IIDLIST} -f
 }
 
 function check_image() {
@@ -289,32 +290,32 @@ function git_config() {
 		local SURNAME
 		local GIT_EMAIL_ADDRESS
 		local EC
-		if ! git config remote.origin.url &>/dev/null
+		if ! git config --file .git/config remote.origin.url &>/dev/null
 		then
 			echo "You are not authorized to use this automation. Aborting!"
 			exit 1
 		fi
-		if [[ "$(git config user.name)" == "" ]]
+		if [[ "$(git config --file .git/config user.name)" == "" ]]
 		then
 			IFS=' ' read -rp "Enter your full name [ENTER]: " NAME SURNAME
-			if [[ "$(git config remote.origin.url | grep "\/\/.*@")" == "" ]]
+			if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]]
 			then
-				git config user.name "${NAME} ${SURNAME}" || EC=1
+				git config --file .git/config user.name "${NAME} ${SURNAME}" || EC=1
 			else
-				[[ "${SURNAME}" != "" ]] && [[ "$(git config remote.origin.url | sed -e 's/.*\/\/\(.*\)@.*/\1/')" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]] && git config user.name "${NAME} ${SURNAME}" || EC=1
+				[[ "${SURNAME}" != "" ]] && [[ "$(git config --file .git/config remote.origin.url | sed -e 's/.*\/\/\(.*\)@.*/\1/')" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]] && git config --file .git/config user.name "${NAME} ${SURNAME}" || EC=1
 			fi
 		fi
 		[[ ${EC} -eq 1 ]] && echo "Invalid full name. Aborting!" && exit ${EC}
-		if [[ "$(git config user.email)" == "" ]]
+		if [[ "$(git config --file .git/config user.email)" == "" ]]
 		then
-			NAME=$(git config user.name | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
-			SURNAME=$(git config user.name | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
+			NAME=$(git config --file .git/config user.name | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+			SURNAME=$(git config --file .git/config user.name | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
 			read -rp "Enter your email address [ENTER]: " GIT_EMAIL_ADDRESS
-			if [[ "$(git config remote.origin.url | grep "\/\/.*@")" == "" ]] && [[ "${GIT_EMAIL_ADDRESS}" != "" ]] && ([[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:2} | tr '[:upper:]' '[:lower:]')"* ]] || [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:1} | tr '[:upper:]' '[:lower:]')"* ]]) && [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]]
+			if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]] && [[ "${GIT_EMAIL_ADDRESS}" != "" ]] && ([[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:2} | tr '[:upper:]' '[:lower:]')"* ]] || [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:1} | tr '[:upper:]' '[:lower:]')"* ]]) && [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]]
 			then
-				git config user.email "${GIT_EMAIL_ADDRESS}" && git config remote.origin.url "$(git config remote.origin.url | sed -e "s|//\(\w\)|//$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)@\1|")" || EC=1
+				git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" && git config --file .git/config remote.origin.url "$(git config --file .git/config remote.origin.url | sed -e "s|//\(\w\)|//$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)@\1|")" || EC=1
 			else
-				[[ "$(git config remote.origin.url)" == *"$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)"* ]] && git config user.email "${GIT_EMAIL_ADDRESS}" || EC=1
+				[[ "$(git config --file .git/config remote.origin.url)" == *"$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)"* ]] && git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" || EC=1
 			fi
 		fi
 		[[ ${EC} -eq 1 ]] && echo "Invalid email address. Aborting!" && exit ${EC}
@@ -509,23 +510,24 @@ function view_vault() {
 function get_repo_creds() {
 	local REPOUSER
 	local REPOPASS
-	if [[ -f ${1} ]]
+	local CNTNRNAME
+	CNTNRNAME="${1}"
+	[[ -f ${2} ]] && grep 'REPOPASS=' "${2}" 1>/dev/null && rm -f "${2}"
+	if [[ ! -f ${2} ]]
 	then
-		grep 'REPOPASS=' "${1}" 1>/dev/null && rm -f "${1}"
-	else
-		echo -e "\n\nYour ${BOLD}$(git config --get remote.origin.url|cut -d '/' -f3|cut -d '@' -f2)${NORMAL} Repository credentials are needed"
+		echo -e "\n\nYour ${BOLD}$(git config --file .git/config --get remote.origin.url|cut -d '/' -f3|cut -d '@' -f2)${NORMAL} Repository credentials are needed"
 		read -rp "Enter your Repository username [ENTER]: " REPOUSER
 		read -rsp "Enter your Repository token [ENTER]: " REPOPASS
 		echo
 		if [[ ${REPOUSER} != "" && ${REPOPASS} != "" ]]
 		then
 			[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
-			printf "REPOUSER='%s'\nREPOPASS='%s'\n" "${REPOUSER}" "${REPOPASS}" > "${1}"
-			add_write_permission "${1}"
-			encrypt_vault "${1}" "${2}"
+			printf "REPOUSER='%s'\nREPOPASS='%s'\n" "${REPOUSER}" "${REPOPASS}" > "${2}"
+			add_write_permission "${2}"
+			encrypt_vault "${1}" "${2}" "${3}"
 			[[ ${debug} == 1 ]] && set -x
-			sudo chown "$(stat -c '%U' "$(pwd)")":"$(stat -c '%G' "$(pwd)")" "${1}"
-			sudo chmod 644 "${1}"
+			sudo chown "$(stat -c '%U' "$(pwd)")":"$(stat -c '%G' "$(pwd)")" "${2}"
+			sudo chmod 644 "${2}"
 		else
 			echo
 			echo "Unable to get repo credentials"
@@ -536,7 +538,9 @@ function get_repo_creds() {
 }
 
 function check_updates() {
-	if [[ -f ${1} && "$(git config user.name)" != "" ]]
+	local CNTNRNAME
+	CNTNRNAME="${1}"
+	if [[ -f ${2} && "$(git config --file .git/config user.name)" != "" ]]
 	then
 		local EC
 		local localbranch
@@ -553,8 +557,6 @@ function check_updates() {
 				local REPOPASS
 				local i
 				local retries
-				local CNTNRNAME
-				CNTNRNAME="${1}"
 				i=0
 				retries=3
 				while [[ ${i} -lt ${retries} ]]
@@ -575,12 +577,12 @@ function check_updates() {
 				local REPOPWD
 				local REMOTEURL
 				local REMOTEID
-				[[ "$(git config --get remote.origin.url | grep 'wwwin-github')" != "" ]] && [[ ${PROXY_ADDRESS} != "" ]] && SET_PROXY="true"
+				[[ "$(git config --file .git/config --get remote.origin.url | grep 'wwwin-github')" != "" ]] && [[ ${PROXY_ADDRESS} != "" ]] && SET_PROXY="true"
 				for i in {1..3}
 				do
 					[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 					REPOPWD="${REPOPASS//@/%40}"
-					[[ "$(git config --get remote.origin.url | grep '\/\/.*@')" == "" ]] && REMOTEURL=$(git config --get remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}:${REPOPWD}@\1|") || REMOTEURL=$(git config --get remote.origin.url | sed -e "s|//.*@|//${REPOUSER}:${REPOPWD}@|")
+					[[ "$(git config --file .git/config --get remote.origin.url | grep '\/\/.*@')" == "" ]] && REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}:${REPOPWD}@\1|") || REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//.*@|//${REPOUSER}:${REPOPWD}@|")
 					REMOTEID=$([[ ${SET_PROXY} ]] && export https_proxy=${PROXY_ADDRESS}; timeout 15 git ls-remote "${REMOTEURL}" refs/heads/"${localbranch}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr | cut -c1-7)
 					[[ ${debug} == 1 ]] && set -x
 					[[ ${REMOTEID} == "" ]] && sleep 3 || break
@@ -591,14 +593,14 @@ function check_updates() {
 					REPO_ERR="$(grep -i maintenance "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr)"
 					if [[ "${REPO_ERR}" == "" ]]
 					then
-					 	printf "\nYour Repository credentials are invalid!\n\n" && rm -f "${1}" && rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr && exit 1
+					 	printf "\nYour Repository credentials are invalid!\n\n" && rm -f "${2}" && rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr && exit 1
 					else
 					 	printf "\n%s" "${REPO_ERR}" && rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr && exit 1
 					fi
 				else
-					if [[ "$(git config remote.origin.url | grep "\/\/.*@")" == "" ]]
+					if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]]
 					then
-						git config remote.origin.url "$(git config remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}@\1|")"
+						git config --file .git/config remote.origin.url "$(git config --file .git/config remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}@\1|")"
 					fi
 					rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr
 				fi
@@ -610,7 +612,7 @@ function check_updates() {
 					if [[ "${ANSWER,,}" == "y" ]]
 					then
 						git reset -q --hard origin/"${localbranch}"
-						git pull "$(git config --get remote.origin.url | sed -e "s|\(//.*\)@|\1:${REPOPASS}@|")" "${localbranch}" &>"${PWD}"/.pullerr && sed -i "s|${REPOPASS}|xxxxx|" "${PWD}"/.pullerr
+						git pull "$(git config --file .git/config --get remote.origin.url | sed -e "s|\(//.*\)@|\1:${REPOPASS}@|")" "${localbranch}" &>"${PWD}"/.pullerr && sed -i "s|${REPOPASS}|xxxxx|" "${PWD}"/.pullerr
 						[[ ${?} == 0 ]] && echo -e "\nThe installation package has been updated. ${BOLD}Please re-run the script for the updates to take effect${NORMAL}\n\n" && EC='return 3'
 						[[ ${?} != 0 ]] && echo -e "\nThe installation package update has failed with the following error:\n\n${BOLD}$(cat "${PWD}"/.pullerr)${NORMAL}\n\n" && EC='exit'
 						rm -f "${PWD}"/.pullerr

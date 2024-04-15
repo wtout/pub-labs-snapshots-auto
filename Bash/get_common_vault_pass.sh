@@ -1,2 +1,2 @@
 #! /bin/bash
-git config remote.origin.url | awk -F '/' '{print $NF}'
+git config --file .git/config remote.origin.url | awk -F '/' '{print $NF}'
