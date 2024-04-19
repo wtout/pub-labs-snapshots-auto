@@ -490,7 +490,7 @@ function encrypt_vault() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
 	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault encrypt "${2}" --vault-password-file "${3}" &>"${ANSIBLE_LOG_LOCATION}"/encrypt_error."${PID}"
-	if [[ -s "${ANSIBLE_LOG_LOCATION}/encrypt_error.${PID}" && "$(grep 'successful' "${ANSIBLE_LOG_LOCATION}/encrypt_error.${PID}")" == "" ]]
+	if [[ -s "${ANSIBLE_LOG_LOCATION}/encrypt_error.${PID}" && "$(grep 'ERROR' "${ANSIBLE_LOG_LOCATION}/encrypt_error.${PID}")" != "" ]]
 	then
 		cat "${ANSIBLE_LOG_LOCATION}"/encrypt_error."${PID}"
 		exit 1
