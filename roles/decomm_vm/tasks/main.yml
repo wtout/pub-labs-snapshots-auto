@@ -1,10 +1,13 @@
 ---
-# Tasks for VM snapshots
+# Tasks for decomm_vm
 - block:
   - name: get current date and time
     ansible.builtin.setup:
       filter:
         - 'date_time'
+    when:
+      - ansible_date_time.date is not defined
+      - ansible_date_time.date|default('') == ''
   - name: get the list of VMs
     community.vmware.vmware_vm_info:
       hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
@@ -14,16 +17,19 @@
       validate_certs: no
     register: reg_vm_list
     no_log: yes
+    when: vm_list is not defined
   - name: define list of VMs
     ansible.builtin.set_fact:
       vm_list: "{{ vm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
+#    loop: "{{ reg_vm_list.virtual_machines|selectattr('guest_name','search','wassimans01')|list }}"
     loop: "{{ reg_vm_list.virtual_machines|rejectattr('guest_name','search','on-decomm-list|stCtlVM-')|rejectattr('folder','search','Templates')|list }}"
     loop_control:
       loop_var: vm_item
       label: "{{ vm_item.guest_name }}"
     no_log: yes
+    when: reg_vm_list is not skipped
   - include_tasks:
-      file: task_delete_snapshots.yml
+      file: task_decommission_vm.yml
       apply:
         vars:
           curr_folder: "{{ vm_item.vm_folder }}"
@@ -32,21 +38,21 @@
     loop: "{{ vm_list|sort(attribute='vm_folder') }}"
     loop_control:
       loop_var: vm_item
-  - ansible.builtin.debug:
-      msg:
-        - 'List of problem VMs:'
-        - "{{ problematic_list|default([]) }}"
-        - 'List of offline VMs:'
-        - "{{ offline_list|default([]) }}"
-        - 'List of non updated VMs:'
-        - "{{ noupdate_list|default([]) }}"
-        - 'List of Snapshots:'
-        - "{{ snapshots_list|default([]) }}"
-        - "faulties_number = {{ problematic_list|default([])|length }}"
-        - "offlines_number = {{ offline_list|default([])|length }}"
-        - "noupdate_number = {{ noupdate_list|default([])|length }}"
-        - "snaps_number = {{ snapshots_counter|default(0) }}"
-        - "snaps_size = {{ ('%0.2f'|format(snapshots_size|float / 1024|pow(4)))|string + ' TiB' if (snapshots_size|int)|string|length > 12 else ('%0.2f'|format(snapshots_size|float / 1024|pow(3)))|string + ' GiB' if (snapshots_size|int)|string|length > 9 else ('%0.2f'|format(snapshots_size|float / 1024|pow(2)))|string + ' MiB' }}"
+#  - ansible.builtin.debug:
+#      msg:
+#        - 'List of problem VMs:'
+#        - "{{ problematic_list|default([]) }}"
+#        - 'List of offline VMs:'
+#        - "{{ offline_list|default([]) }}"
+#        - 'List of non updated VMs:'
+#        - "{{ noupdate_list|default([]) }}"
+#        - 'List of Snapshots:'
+#        - "{{ snapshots_list|default([]) }}"
+#        - "faulties_number = {{ problematic_list|default([])|length }}"
+#        - "offlines_number = {{ offline_list|default([])|length }}"
+#        - "noupdate_number = {{ noupdate_list|default([])|length }}"
+#        - "snaps_number = {{ snapshots_counter|default(0) }}"
+#        - "snaps_size = {{ ('%0.2f'|format(snapshots_size|float / 1024|pow(4)))|string + ' TiB' if (snapshots_size|int)|string|length > 12 else ('%0.2f'|format(snapshots_size|float / 1024|pow(3)))|string + ' GiB' if (snapshots_size|int)|string|length > 9 else ('%0.2f'|format(snapshots_size|float / 1024|pow(2)))|string + ' MiB' }}"
   delegate_to: localhost
   run_once: yes
-  tags: ['remove_snapshots']
+  tags: ['decomm_vm']

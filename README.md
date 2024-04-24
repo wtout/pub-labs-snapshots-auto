@@ -41,7 +41,8 @@ Create your own system definition file under the _``Definitions``_ directory to 
 The system definition file consists of the following variables:
 
   - **datacenter.primary.name** (_String_): Required. Primary Datacenter name
-  - **datacenter.primary.max_age** (_Integer_): Required. Snapshots maximum age
+  - **datacenter.primary.max_snapshot_age** (_Integer_): Required. Snapshots maximum age
+  - **datacenter.primary.vm_age** (_Integer_): Required. Virtual Machine age
 
 To create the system inventory without deploying the system, issue the following command from the automation root directory (pae-labs-snapshots-auto):
 
@@ -69,7 +70,8 @@ The list of roles used in the playbooks:
 
   - **define_inventory**: generates the system inventory from the system definition file
   - **check_creds**: validates the user's credentials
-  - **remove_snapshots**: removes VM snapshots older than defined max_age
+  - **remove_snapshots**: removes VM snapshots older than defined max_snapshot_age
+  - **decomm_vm**: moves a VM to the decommissioning list if it is older than a defined vm_age and it is not tagged
   - **notify**: sends a notification via Webex Teams channel indicating the status of the activity
 
 

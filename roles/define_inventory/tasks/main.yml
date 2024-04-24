@@ -11,7 +11,8 @@
   - name: check if required variables are defined
     ansible.builtin.set_fact:
       pdn: "{{ 'Primary Datacenter name is not defined' if (environment_definition.datacenter.primary.name is not defined or environment_definition.datacenter.primary.name == none) else '' }}"
-      pma: "{{ 'Primary snapshot maximum age is not defined' if (environment_definition.datacenter.primary.max_age is not defined or environment_definition.datacenter.primary.max_age == none) else '' }}"
+      pma: "{{ 'Primary snapshot maximum age is not defined' if (environment_definition.datacenter.primary.max_snapshot_age is not defined or environment_definition.datacenter.primary.max_snapshot_age == none) else '' }}"
+      pva: "{{ 'Primary VM age is not defined' if (environment_definition.datacenter.primary.vm_age is not defined or environment_definition.datacenter.primary.vm_age == none) else '' }}"
 
   - name: verify that all variables are defined
     ansible.builtin.assert:
@@ -26,11 +27,17 @@
         - "datacenters[environment_definition.datacenter.primary.name] is defined"
       fail_msg: "The primary datacenter selected, {{ environment_definition.datacenter.primary.name }}, is not in the list of supported datacenters. Aborting!"
 
-  - name: verify that primary maximum age is valid
+  - name: verify that primary maximum snapshot age is valid
     ansible.builtin.assert:
       that:
-        - "environment_definition.datacenter.primary.max_age|type_debug == 'int'"
-      fail_msg: "The snapshot maximum age defined, {{ environment_definition.datacenter.primary.max_age }}, is not an integer. Aborting!"
+        - "environment_definition.datacenter.primary.max_snapshot_age|type_debug == 'int'"
+      fail_msg: "The snapshot maximum age defined, {{ environment_definition.datacenter.primary.max_snapshot_age }}, is not an integer. Aborting!"
+
+  - name: verify that primary VM age is valid
+    ansible.builtin.assert:
+      that:
+        - "environment_definition.datacenter.primary.vm_age|type_debug == 'int'"
+      fail_msg: "The VM age defined, {{ environment_definition.datacenter.primary.vm_age }}, is not an integer. Aborting!"
 
   - name: detect directory owner
     ansible.builtin.shell: ls -ld {{ auto_dir }}/Bash | awk '{print $3}' | xargs

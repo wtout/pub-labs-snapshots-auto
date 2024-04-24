@@ -12,4 +12,7 @@ datacenter:
     name: '{{ environment_definition.datacenter.primary.name }}'
 
     # Snapshots maximum age (required) (integer)
-    max_age: {{ environment_definition.datacenter.primary.max_age }}
+    max_snapshot_age: {{ environment_definition.datacenter.primary.max_snapshot_age }}
+
+    # VM age (required) (integer)
+    vm_age: {{ environment_definition.datacenter.primary.vm_age }}

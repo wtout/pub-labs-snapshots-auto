@@ -18,3 +18,4 @@
 
   roles:
     - role: remove_snapshots
+    - role: decomm_vm

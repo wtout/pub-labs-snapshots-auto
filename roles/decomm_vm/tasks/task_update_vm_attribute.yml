@@ -1,0 +1,15 @@
+---
+# Tasks to update the VM's attribute
+- name: Update {{ attribute_name }} attribute for {{ vm_name }}
+  community.vmware.vmware_guest_custom_attributes:
+    hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+    username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+    password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+    datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+    folder: "{{ folder_name }}"
+    uuid: "{{ vm_uuid }}"
+    state: present
+    attributes:
+      - name: "{{ attribute_name }}"
+        value: "{{ attribute_value }}"
+    validate_certs: no

@@ -10,4 +10,7 @@ datacenter:
     name: 'PAE-HX-DC-2'
 
     # Snapshots maximum age (required) (integer)
-    max_age: 7
+    max_snapshot_age: 4
+
+    # VM age (required) (integer)
+    vm_age: 3
