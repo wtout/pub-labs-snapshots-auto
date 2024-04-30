@@ -21,13 +21,14 @@
     loop: "{{ playbook_status.stdout_lines | select('regex', '(unreachable=|failed=)[1-9]+') }}"
     loop_control:
       loop_var: line_item
-  - name: Get number of snapshots from {{ LFILE }}
+  - name: Get statistics from {{ LFILE }}
     ansible.builtin.shell: |
-      grep 'faulties_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of faulty VMs not found'
-      grep 'offlines_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of offline VMs not found'
-      grep 'noupdate_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of non-updated VMs not found'
-      grep 'snaps_number = ' {{ LFILE }} | sed 's/"//g; s/,//g' || echo 'Number of snapshots not found'
-      grep 'snaps_size = ' {{ LFILE }} | sed 's/"//g' || echo 'Size of snapshots not found'
+      grep 'faulties_number = ' {{ LFILE }} || echo 'faulties_number not found'
+      grep 'offlines_number = ' {{ LFILE }} || echo 'offlines_number not found'
+      grep 'noupdate_number = ' {{ LFILE }} || echo 'noupdate_number not found'
+      grep 'snaps_number = ' {{ LFILE }} || echo 'snaps_number not found'
+      grep 'snaps_size = ' {{ LFILE }}  || echo 'snaps_size not found'
+      grep 'decomms_number = ' {{ LFILE }} || echo 'decomms_number not found'
     register: reg_numbers
   - name: Get user's identity
     ansible.builtin.shell: head -4 {{ LFILE }}
@@ -57,14 +58,16 @@
       - "{{ 'Number of non-updated VMs = ' + noupdate|string if reg_numbers.stdout != '' and noupdate is not search('not found') and noupdate|int > 0 else '' }}"
       - "{{ 'Number of VM snapshots deleted = ' + snapsnum|string if reg_numbers.stdout != '' and snapsnum is not search('not found') and snapsnum|int > 0 else '' }}"
       - "{{ 'Disk space recovered = ' + snapssize|string if reg_numbers.stdout != '' and snapssize is not search('not found') and snapssize|split|first|float > 0 else '' }}"
+      - "{{ 'Number of decommisioning list VMs = ' + decommsnum|string if reg_numbers.stdout != '' and decommsnum is not search('not found') and decommsnum|int > 0 else '' }}"
     loop_control:
       loop_var: loop_item
     vars:
-      faulties: "{{ reg_numbers.stdout_lines|select('search','faulties_number')|list|join|split('= ')|last }}"
-      offlines: "{{ reg_numbers.stdout_lines|select('search','offlines_number')|list|join|split('= ')|last }}"
-      noupdate: "{{ reg_numbers.stdout_lines|select('search','noupdate_number')|list|join|split('= ')|last }}"
-      snapsnum: "{{ reg_numbers.stdout_lines|select('search','snaps_number')|list|join|split('= ')|last }}"
-      snapssize: "{{ reg_numbers.stdout_lines|select('search','snaps_size')|list|join|split('= ')|last }}"
+      faulties: "{{ reg_numbers.stdout_lines|select('search','faulties_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
+      offlines: "{{ reg_numbers.stdout_lines|select('search','offlines_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
+      noupdate: "{{ reg_numbers.stdout_lines|select('search','noupdate_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
+      snapsnum: "{{ reg_numbers.stdout_lines|select('search','snaps_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
+      snapssize: "{{ reg_numbers.stdout_lines|select('search','snaps_size')|list|join|split('= ')|last|replace('\"','') }}"
+      decommsnum: "{{ reg_numbers.stdout_lines|select('search','decomms_number')|list|join|split('= ')|last|replace('\"','') }}"
   - name: define NOTIF_MSG
     ansible.builtin.set_fact:
       NOTIF_MSG: "{{ NOTIF_MSG | default ([]) + [loop_item] | list }}"
