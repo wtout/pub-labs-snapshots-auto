@@ -32,13 +32,6 @@
           vm_name: "{{ curr_vm }}"
           vm_moid: "{{ reg_guest_info.instance.moid }}"
     when: curr_vm is not search('decomm')
-  - name: set boot delay for {{ curr_vm }}
-    ansible.builtin.include_tasks:
-      file: task_set_vm_boot_delay.yml
-      apply:
-        vars:
-          vm_name: "{{ curr_vm }}"
-          vm_uuid: "{{ curr_uuid }}"
   - name: update description for {{ curr_vm }}
     ansible.builtin.include_tasks:
       file: task_update_vm_description.yml

@@ -39,7 +39,7 @@
     ignore_errors: true
   - name: Get playbook execution time from {{ LFILE }}
     ansible.builtin.shell: |
-      grep 'PLAY RECAP' {{ LFILE }} &>/dev/null && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep '*' &>/dev/null && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep -E '.[0-9]{,3} \*{3,}' | tail -1 | awk '{print $(NF - 1)}' || echo 'No Execution time found'
+      grep 'PLAY RECAP' {{ LFILE }} >/dev/null 2>&1 && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep '*' >/dev/null 2>&1 && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep -E '.[0-9]{,3} \*{3,}' | tail -1 | awk '{print $(NF - 1)}' || echo 'No Execution time found'
     register: playbook_execution
   - name: define playbook_time
     ansible.builtin.set_fact:
