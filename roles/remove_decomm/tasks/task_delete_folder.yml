@@ -9,10 +9,6 @@
     msg: "The folder '{{ folder_name }}' cannot be deleted because it is not empty"
   when: not folder_empty
 - block:
-  - debug:
-      msg:
-        - "{{ (folder_name.split('/vm')|last).split('/')[-1] }}"
-        - "{{ (folder_name.split('/vm')|last).split('/')[:-1]|join('/') }}"
   - name: Delete the {{ folder_name }} folder
     community.vmware.vcenter_folder:
       hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
