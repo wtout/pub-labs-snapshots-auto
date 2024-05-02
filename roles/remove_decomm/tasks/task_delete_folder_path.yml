@@ -1,0 +1,28 @@
+---
+# Tasks to delete the VM folder path
+- block:
+  - name: initialize list of sub folders
+    ansible.builtin.set_fact:
+      sub_folder_list: "{{ [folder] }}"
+  - name: define list of sub folders
+    ansible.builtin.set_fact:
+      sub_folder_list: "{{ sub_folder_list + [sub_folder] }}"
+    when: sub_folder != ''
+    vars:
+      sub_folder: "{{ folder.split('/')[:-(loop_item|int)]|join('/') }}"
+    loop: "{{ range(1,folder.split('/')|list|length) }}"
+    loop_control:
+      loop_var: loop_item
+  vars:
+    folder: "{{ curr_folder.split('/vm')|last }}"
+- name: initialize folder_empty
+  ansible.builtin.set_fact:
+    folder_empty: false
+- ansible.builtin.include_tasks:
+    file: task_delete_folder.yml
+    apply:
+      vars:
+        folder_name: "{{ subfolder_item }}"
+  loop: "{{ sub_folder_list }}"
+  loop_control:
+    loop_var: subfolder_item

@@ -1,0 +1,30 @@
+---
+# Task file to delete reverse DNS record
+- block:
+  - name: Remove {{ mydesignation }} reverse DNS record
+    ansible.builtin.shell: |
+      {% if myipaddress is search('172.(23|30)') %}
+      sshpass -p {{ svc_password }} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -T -l {{ svc_username }} {{ lookup('env','MYIP') }} <<EOF
+      {% endif %}
+      nsupdate {% if myipaddress is search('172.(23|30)') %}-g {% endif %}<<EOC
+      server {{ myserver }}
+      zone {{ myipaddress.split('.')[:-1] | reverse | join('.') + '.in-addr.arpa' }}
+      update delete {{ myipaddress.split('.') | reverse | join('.') + '.in-addr.arpa' }} PTR
+      send
+      EOC
+      {% if myipaddress is search('172.(23|30)') %}
+      EOF
+      {% endif %}
+    register: reg_rdr
+    failed_when: reg_rdr.rc != 0 and reg_rdr.stderr is not search('tsig verify failure')
+    until: reg_rdr is succeeded
+    delay: 10
+#    no_log: yes
+  rescue:
+  - ansible.builtin.debug:
+      msg: "{{ reg_rdr|replace(svc_password,'obfuscated') if svc_password != '' else reg_rdr }}"
+  always:
+  - ansible.builtin.assert:
+      that: reg_rdr is succeeded
+    when: myipaddress is search('172.(23|30)')
+  delegate_to: localhost

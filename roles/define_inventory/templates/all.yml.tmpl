@@ -16,3 +16,16 @@ datacenter:
 
     # VM age (required) (integer)
     vm_age: {{ environment_definition.datacenter.primary.vm_age }}
+
+##################################################################################
+# System configuration variables
+##################################################################################
+sysconfig:
+
+  primary:
+
+    # DNS servers list
+    dns_servers: {{ [ '172.23.251.21', '172.23.251.22' ] if environment_definition.datacenter.primary.name is regex('RTP-Staging|STG') else ['172.30.251.21', '172.30.251.22'] if environment_definition.datacenter.primary.name is regex('PAE-HX-DC|Dev Engineering') else ['172.19.251.21', '172.19.251.22'] }}
+
+    # Domain name to use
+    domain_name: "{{ ('staging.' if environment_definition.datacenter.primary.name is regex('RTP-Staging|STG') else '') + 'cisco-' + ('pae' if environment_definition.datacenter.primary.name is regex('PAE-HX-DC|Dev Engineering') else 'cms') + '.com' }}"

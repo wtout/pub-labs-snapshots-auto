@@ -39,6 +39,7 @@
         vars:
           vm_name: "{{ curr_vm }}"
           vm_uuid: "{{ curr_uuid }}"
+          vm_ip: "{{ reg_guest_info.instance.hw_eth0.ipaddresses[0] }}"
   - name: update date-todecomm attribute for {{ curr_vm }}
     ansible.builtin.include_tasks:
       file: task_update_vm_attribute.yml

@@ -1,0 +1,28 @@
+---
+# Task file to delete forward DNS record
+- block:
+  - name: Remove {{ mydesignation }} DNS record
+    ansible.builtin.shell: |
+      {% if myipaddress is search('172.(23|30)') %}
+      sshpass -p {{ svc_password }} ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -T -l {{ svc_username }} {{ lookup('env','MYIP') }} <<EOF
+      {% endif %}
+      nsupdate {% if myipaddress is search('172.(23|30)') %}-g {% endif %}<<EOC
+      server {{ myserver }}
+      update delete {{ myrecord }}.{{ mydomain }} A
+      send
+      EOC
+      {% if myipaddress is search('172.(23|30)') %}
+      EOF
+      {% endif %}
+    register: reg_fdr
+    failed_when: reg_fdr.rc != 0 and reg_fdr.stderr is not search('tsig verify failure')
+    until: reg_fdr is succeeded
+    delay: 10
+#    no_log: yes
+  rescue:
+  - ansible.builtin.debug:
+      msg: "{{ reg_fdr|replace(svc_password,'obfuscated') if svc_password != '' else reg_fdr }}"
+  always:
+  - ansible.builtin.assert:
+      that: reg_fdr is succeeded
+  delegate_to: localhost
