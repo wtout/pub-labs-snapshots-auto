@@ -13,9 +13,14 @@
   no_log: yes
   ignore_errors: yes
 - block:
-  - name: update list of VMs to be decommissioned
-    ansible.builtin.set_fact:
-      decomm_vm_list: "{{ decomm_vm_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+  - name: update description for {{ curr_vm }}
+    ansible.builtin.include_tasks:
+      file: task_update_vm_description.yml
+      apply:
+        vars:
+          vm_name: "{{ curr_vm }}"
+          vm_uuid: "{{ curr_uuid }}"
+          vm_ip: "{{ reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|list|first }}"
   - name: stop {{ curr_vm }}
     ansible.builtin.include_tasks:
       file: task_poweroff_vm.yml
@@ -32,14 +37,6 @@
           vm_name: "{{ curr_vm }}"
           vm_moid: "{{ reg_guest_info.instance.moid }}"
     when: curr_vm is not search('decomm')
-  - name: update description for {{ curr_vm }}
-    ansible.builtin.include_tasks:
-      file: task_update_vm_description.yml
-      apply:
-        vars:
-          vm_name: "{{ curr_vm }}"
-          vm_uuid: "{{ curr_uuid }}"
-          vm_ip: "{{ reg_guest_info.instance.hw_eth0.ipaddresses[0] }}"
   - name: update date-todecomm attribute for {{ curr_vm }}
     ansible.builtin.include_tasks:
       file: task_update_vm_attribute.yml
@@ -50,7 +47,13 @@
           vm_uuid: "{{ curr_uuid }}"
           attribute_name: 'date-todecomm'
           attribute_value: "{{ '%Y-%m-%d' | strftime(ansible_date_time.epoch|int + 30*24*3600) }}"
+  - name: update list of VMs to be decommissioned
+    ansible.builtin.set_fact:
+      decomm_vm_list: "{{ decomm_vm_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
   when:
+    - reg_guest_info.instance.hw_power_status != 'poweredOff'
+    - reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|list != []
+    - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-toaudit')|map(attribute='value')|list|join|lower != 'exempt'
     - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list != {}
     - (ansible_date_time.date|to_datetime('%Y-%m-%d') - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join|to_datetime('%Y-%m-%d')).days|int >= datacenter.primary.vm_age
     - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','team-contact1')|map(attribute='value')|list|join == '' or reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','team-contact2')|map(attribute='value')|list|join == '' or reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','team-mailer')|map(attribute='value')|list|join == ''

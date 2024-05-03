@@ -53,10 +53,7 @@
       register: reg_snaps_info
       until: reg_snaps_info.instance.config.createDate is search('T')
       no_log: yes
-      when:
-        - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join == '' or snapshots_ids != []
     - include_tasks: task_update_attribute.yml
-      when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join == ''
     - name: Initialize the size of the snapshots
       ansible.builtin.set_fact:
         snaps_size: 0
