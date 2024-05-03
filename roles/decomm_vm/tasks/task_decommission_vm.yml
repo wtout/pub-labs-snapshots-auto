@@ -53,6 +53,7 @@
   when:
     - reg_guest_info.instance.hw_power_status != 'poweredOff'
     - reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|list != []
+    - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join != ''
     - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-toaudit')|map(attribute='value')|list|join|lower != 'exempt'
     - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list != {}
     - (ansible_date_time.date|to_datetime('%Y-%m-%d') - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join|to_datetime('%Y-%m-%d')).days|int >= datacenter.primary.vm_age
