@@ -51,11 +51,9 @@
       apply:
         vars:
           curr_folder: "{{ folder_item }}"
-    loop: "{{ deleted_vm_folder_list }}"
+    loop: "{{ deleted_vm_folder_list|default([]) }}"
     loop_control:
       loop_var: folder_item
-    vars:
-      deleted_vm_folder_list: ["/PAE-HX-DC/vm/HX Hosted/acme1", "/PAE-HX-DC/vm/PAE-DEMO/PLNXVM"]
   - ansible.builtin.debug:
       msg:
         - 'List of deleted VMs:'
