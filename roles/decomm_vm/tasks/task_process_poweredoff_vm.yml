@@ -30,9 +30,6 @@
   no_log: yes
   when:
     - build_list_dv_off|default(false)
-#- ansible.builtin.include_role:
-#    name: get_poweredoff
-#  when: offline_vm_list is not defined
 - name: define build_offline_list_dv_off
   ansible.builtin.set_fact:
     build_offline_list_dv_off: true
