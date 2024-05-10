@@ -595,7 +595,7 @@ function check_updates() {
 					then
 					 	printf "\nYour Repository credentials are invalid!\n\n" && rm -f "${2}" && rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr && exit 1
 					else
-					 	printf "\n%s" "${REPO_ERR}" && rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr && exit 1
+					 	printf "\n%s\n\n" "${REPO_ERR}" && sleep 5 && rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr
 					fi
 				else
 					if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]]

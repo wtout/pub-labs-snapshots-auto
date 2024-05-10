@@ -1,49 +1,50 @@
 ---
 # tasks file for remove_decomm
 - block:
-  - name: get current date and time
-    ansible.builtin.setup:
-      filter:
-        - 'date_time'
+  - ansible.builtin.include_role:
+      name: remove_snapshots
+      tasks_from: task_get_date_time.yml
     when:
       - ansible_date_time.date is not defined
       - ansible_date_time.date|default('') == ''
+  - name: define get_vm_list_rd
+    ansible.builtin.set_fact:
+      get_vm_list_rd: true
+    when: reg_vm_list is not defined
+  - name: define get_vm_list_rd
+    ansible.builtin.set_fact:
+      get_vm_list_rd: true
+    when: reg_vm_list is not defined
   - block:
-    - name: get the list of VMs
-      community.vmware.vmware_vm_info:
-        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
-        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
-        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-        vm_type: vm
-        validate_certs: no
-      register: reg_vm_list
-      no_log: yes
+    - ansible.builtin.include_role:
+        name: remove_snapshots
+        tasks_from: task_get_list_vms.yml
+#        apply:
+#          vars:
+#            object_type: 'template'
     rescue:
     - ansible.builtin.debug:
         msg: "{{ reg_vm_list }}"
     always:
     - ansible.builtin.assert:
         that: reg_vm_list is succeeded
-    when:
-      - reg_vm_list is not defined or reg_vm_list is skipped
+    when: get_vm_list_rd|default(false)
   - name: define list of VMs to be decommissioned
     ansible.builtin.set_fact:
-      vm_on_decomm_list: "{{ vm_on_decomm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
+      to_decomm_list: "{{ to_decomm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
     loop: "{{ reg_vm_list.virtual_machines|selectattr('guest_name','search','on-decomm-list')|list }}"
     loop_control:
       loop_var: vm_item
       label: "{{ vm_item.guest_name }}"
     no_log: yes
-    when:
-      - reg_vm_list is not skipped
-  - include_tasks:
+  - ansible.builtin.include_tasks:
       file: task_remove_decomm_vm.yml
       apply:
         vars:
           curr_folder: "{{ vm_item.vm_folder }}"
           curr_vm: "{{ vm_item.vm_name }}"
           curr_uuid: "{{ vm_item.vm_uuid }}"
-    loop: "{{ vm_on_decomm_list|default([])|sort(attribute='vm_folder') }}"
+    loop: "{{ to_decomm_list|default([])|sort(attribute='vm_folder') }}"
     loop_control:
       loop_var: vm_item
   - ansible.builtin.include_tasks:
@@ -54,11 +55,6 @@
     loop: "{{ deleted_vm_folder_list|default([]) }}"
     loop_control:
       loop_var: folder_item
-  - ansible.builtin.debug:
-      msg:
-        - 'List of deleted VMs:'
-        - "{{ deleted_vm_list|default([]) }}"
-        - "deleted_number = {{ deleted_vm_list|default([])|length }}"
   delegate_to: localhost
   run_once: yes
   tags: ['remove_decomm']

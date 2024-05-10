@@ -8,7 +8,6 @@
         myserver: "{{ name_server }}"
         mydomain: "{{ domain_name }}"
         myrecord: "{{ vm_name }}"
-        myipaddress: "{{ vm_ip }}"
 - ansible.builtin.include_tasks:
     file: task_delete_reverse_record.yml
     apply:
@@ -18,3 +17,5 @@
         mydomain: "{{ domain_name }}"
         myrecord: "{{ vm_name }}"
         myipaddress: "{{ vm_ip }}"
+  when:
+    - vm_ip|default('') != ''

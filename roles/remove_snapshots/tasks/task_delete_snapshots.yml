@@ -18,10 +18,15 @@
       problematic_list: "{{ problematic_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
     when: reg_guest_info is failed
   - block:
-    - name: define list of offline VMs
-      ansible.builtin.set_fact:
-        offline_list: "{{ offline_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
-      when: reg_guest_info.instance.hw_power_status == 'poweredOff'
+    - ansible.builtin.include_tasks:
+        file: task_get_poweredoff.yml
+        apply:
+          vars:
+            folder_name: "{{ curr_folder }}"
+            vm_name: "{{ curr_vm }}"
+            vm_uuid: "{{ curr_uuid }}"
+      when:
+        - reg_guest_info.instance.hw_power_status == 'poweredOff'
     - name: initialize snapshots IDs list
       ansible.builtin.set_fact:
         snapshots_ids: []
@@ -53,11 +58,11 @@
       register: reg_snaps_info
       until: reg_snaps_info.instance.config.createDate is search('T')
       no_log: yes
-    - include_tasks: task_update_attribute.yml
+    - ansible.builtin.include_tasks: task_update_attribute.yml
     - name: Initialize the size of the snapshots
       ansible.builtin.set_fact:
         snaps_size: 0
-    - include_tasks:
+    - ansible.builtin.include_tasks:
         file: task_get_snapshots_size.yml
         apply:
           vars:

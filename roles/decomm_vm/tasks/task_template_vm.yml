@@ -1,19 +1,20 @@
 ---
-# Tasks to rename the VM
+# Tasks to convert the VM to template
 - block:
-    - name: Rename {{ vm_name }} to _on-decomm-list>>{{ vm_name }}
-      community.vmware.vmware_object_rename:
+    - name: Convert {{ vm_name }} to template
+      community.vmware.vmware_guest:
         hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
         username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
         password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-        object_type: 'VM'
-        object_moid: "{{ vm_moid }}"
-        new_name: "_on-decomm-list>>{{ vm_name }}"
+        datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+        uuid: "{{ vm_uuid }}"
+        is_template: yes
         validate_certs: no
-      register: reg_rename_vm
+      register: reg_template_vm
+#      no_log: yes
   rescue:
     - ansible.builtin.debug:
-        msg: "{{ reg_rename_vm }}"
+        msg: "{{ reg_template_vm }}"
   always:
     - ansible.builtin.assert:
-        that: reg_rename_vm is succeeded
+        that: reg_template_vm is succeeded
