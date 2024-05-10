@@ -73,6 +73,7 @@ The list of roles used in the playbooks:
   - **remove_snapshots**: removes VM snapshots older than defined max_snapshot_age
   - **decomm_vm**: moves a VM to the decommissioning list if it is older than a defined vm_age and it is not tagged
   - **remove_decomm**: removes VMs on or after the date-todecomm date
+  - **print_stats**: prints statistics gathered during the execution of the different roles
   - **notify**: sends a notification via Webex Teams channel indicating the status of the activity
 
 
