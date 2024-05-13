@@ -61,6 +61,6 @@
         curr_folder: "{{ vm_item.vm_folder }}"
         curr_vm: "{{ vm_item.vm_name }}"
         curr_uuid: "{{ vm_item.vm_uuid }}"
-  loop: "{{ vm_on_decomm_list|sort(attribute='vm_folder') }}"
+  loop: "{{ vm_on_decomm_list|default([])|sort(attribute='vm_folder') }}"
   loop_control:
     loop_var: vm_item
