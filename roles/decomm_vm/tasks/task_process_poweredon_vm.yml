@@ -23,7 +23,7 @@
 - name: define list of VMs
   ansible.builtin.set_fact:
     vm_list: "{{ vm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
-  loop: "{{ reg_vm_list.virtual_machines|rejectattr('guest_name','search','on-decomm-list|stCtlVM-')|rejectattr('folder','search','Templates')|list }}"
+  loop: "{{ reg_vm_list.virtual_machines|rejectattr('guest_name','search','on-decomm-list|stCtlVM-')|rejectattr('folder','search','Templates|vcenter|vCenter')|list }}"
   loop_control:
     loop_var: vm_item
     label: "{{ vm_item.guest_name }}"
