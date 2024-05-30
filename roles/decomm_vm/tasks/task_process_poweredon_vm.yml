@@ -37,7 +37,7 @@
 - name: define list of VMs to be decommissioned
   ansible.builtin.set_fact:
     vm_on_decomm_list: "{{ vm_on_decomm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
-  loop: "{{ reg_vm_list.virtual_machines|selectattr('folder','search','acme1')|selectattr('guest_name','search','on-decomm-list')|list }}"
+  loop: "{{ reg_vm_list.virtual_machines|selectattr('guest_name','search','on-decomm-list')|list }}"
   loop_control:
     loop_var: vm_item
     label: "{{ vm_item.guest_name }}"

@@ -31,14 +31,6 @@
       vars:
         dtd: "{{ reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|map(attribute='value')|list|join }}"
         decommdate: "{{ '%Y-%m-%d' | strftime(ansible_date_time.epoch|int + 30*24*3600) if dtd == '' else dtd }}"
-    - name: stop {{ curr_vm }}
-      ansible.builtin.include_tasks:
-        file: task_poweroff_vm.yml
-        apply:
-          vars:
-            folder_name: "{{ curr_folder }}"
-            vm_name: "{{ curr_vm }}"
-            vm_uuid: "{{ curr_uuid }}"
     - name: rename {{ curr_vm }}
       ansible.builtin.include_tasks:
         file: task_rename_vm.yml

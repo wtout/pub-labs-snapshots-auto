@@ -65,7 +65,6 @@
 #            vm_uuid: "{{ curr_uuid }}"
     when:
       - curr_vm is search('on-decomm-list')
-      - reg_guest_info.instance.hw_power_status == 'poweredOff'
       - reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|list != []
       - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join != ''
       - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-toaudit')|map(attribute='value')|list|join|lower != 'exempt'
@@ -120,7 +119,6 @@
         decomm_vm_list: "{{ decomm_vm_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
     when:
       - curr_vm is not search('on-decomm-list')
-      - reg_guest_info.instance.hw_power_status == 'poweredOn'
       - reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|list != []
       - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-created')|map(attribute='value')|list|join != ''
       - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-toaudit')|map(attribute='value')|list|join|lower != 'exempt'
@@ -130,4 +128,6 @@
   - ansible.builtin.fail:
       msg: VMs in this VCenter do not have the required custom attributes for the VM decommissioning process
     when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list == {}
-  when: reg_guest_info is succeeded
+  when:
+    - reg_guest_info is succeeded
+    - reg_guest_info.instance.hw_power_status == 'poweredOn'
