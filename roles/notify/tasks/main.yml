@@ -68,9 +68,9 @@
       offlines: "{{ reg_numbers.stdout_lines|select('search','offlines_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
       noupdate: "{{ reg_numbers.stdout_lines|select('search','noupdate_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
       snapsnum: "{{ reg_numbers.stdout_lines|select('search','snaps_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
-      snapssize: "{{ reg_numbers.stdout_lines|select('search','snaps_size')|list|join|split('= ')|last|replace('\"','') }}"
-      decommsnum: "{{ reg_numbers.stdout_lines|select('search','decomms_number')|list|join|split('= ')|last|replace('\"','') }}"
-      deletednum: "{{ reg_numbers.stdout_lines|select('search','deleted_number')|list|join|split('= ')|last|replace('\"','') }}"
+      snapssize: "{{ reg_numbers.stdout_lines|select('search','snaps_size')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
+      decommsnum: "{{ reg_numbers.stdout_lines|select('search','decomms_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
+      deletednum: "{{ reg_numbers.stdout_lines|select('search','deleted_number')|list|join|split('= ')|last|regex_replace('\"|,','') }}"
   - name: define NOTIF_MSG
     ansible.builtin.set_fact:
       NOTIF_MSG: "{{ NOTIF_MSG | default ([]) + [loop_item] | list }}"
