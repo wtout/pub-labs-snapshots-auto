@@ -730,8 +730,11 @@ function run_playbook() {
 function disable_logging() {
 	if [[ "${LOG}" == "true" ]] && [[ -f "${LOG_FILE}" ]]
 	then
+		local FILE_TIMESTAMP
+		[[ $(id -gn | wc -w) -eq 1 ]] && FILE_TIMESTAMP=$(ls --full-time --time-style=full-iso "${LOG_FILE}" | awk '{print $6"-"$7}')
+		[[ $(id -gn | wc -w) -eq 2 ]] && FILE_TIMESTAMP=$(ls --full-time --time-style=full-iso "${LOG_FILE}" | awk '{print $7"-"$8}')
 		unset ANSIBLE_LOG_PATH
-		NEW_LOG_FILE=${LOG_FILE}.$(ls --full-time "${LOG_FILE}" | awk '{print $6"-"$7}')
+		NEW_LOG_FILE=${LOG_FILE}.${FILE_TIMESTAMP}
 		chmod 444 "${LOG_FILE}"
 		mv -f "${LOG_FILE}" "${NEW_LOG_FILE}"
 		echo -e "\nThe log file is ${BOLD}${PWD}/Logs/$(basename ${NEW_LOG_FILE})${NORMAL}\n\n"

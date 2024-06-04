@@ -50,9 +50,6 @@
     loop_control:
       loop_var: vm_item
   when: build_offline_list_dv_off|default(false)
-- debug:
-    msg:
-      - "{{ offline_vm_list|default([]) }}"
 - ansible.builtin.include_tasks:
     file: task_decommission_poweredoff_vm.yml
     apply:
