@@ -7,7 +7,7 @@ datacenter:
   primary:
 
     # Available datacenters: STG-HX-DC, RTP-Staging, PAE-HX-DC, Plat-Ops, Dev Engineering, cdra-Build-Development, PAE-Customer-Build, RTP5, Alln1 (required) (string)
-    name: 'PAE-HX-DC-2'
+    name: 'PAE-HX-DC'
 
     # Snapshots maximum age (required) (integer)
     max_snapshot_age: 4
