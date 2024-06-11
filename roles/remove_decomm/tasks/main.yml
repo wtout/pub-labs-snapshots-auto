@@ -61,7 +61,7 @@
       file: task_delete_folder_path.yml
       apply:
         vars:
-          curr_folder: "{{ folder_item }}"
+          curr_folder: "{{ folder_item.split(':')|first }}"
     loop: "{{ deleted_vm_folder_list|default([]) }}"
     loop_control:
       loop_var: folder_item
