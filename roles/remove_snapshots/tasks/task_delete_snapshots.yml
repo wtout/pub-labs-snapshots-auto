@@ -58,7 +58,11 @@
       register: reg_snaps_info
       until: reg_snaps_info.instance.config.createDate is search('T')
       no_log: yes
-    - ansible.builtin.include_tasks: task_update_attribute.yml
+    - ansible.builtin.include_tasks:
+        file: task_update_attribute.yml
+        apply:
+          vars:
+            reg_var: "{{ reg_snaps_info }}"
     - name: Initialize the size of the snapshots
       ansible.builtin.set_fact:
         snaps_size: 0

@@ -23,16 +23,34 @@
     ansible.builtin.set_fact:
       build_list_rs: true
     when: vm_list is not defined
-  - name: define list of VMs
-    ansible.builtin.set_fact:
-      vm_list: "{{ vm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
-    loop: "{{ reg_vm_list.virtual_machines|rejectattr('guest_name','search','on-decomm-list|stCtlVM-')|rejectattr('folder','search','Templates|vcenter|vCenter')|list }}"
-    loop_control:
-      loop_var: vm_item
-      label: "{{ vm_item.guest_name }}"
+  - block:
+    - name: define list of VMs
+      ansible.builtin.set_fact:
+        vm_list: "{{ vm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
+      loop: "{{ reg_vm_list.virtual_machines|rejectattr('guest_name','search','on-decomm-list|stCtlVM-')|rejectattr('folder','search','Templates|vcenter|vCenter')|list }}"
+      loop_control:
+        loop_var: vm_item
+        label: "{{ vm_item.guest_name }}"
+    - name: define list of on-decomm-list VMs
+      ansible.builtin.set_fact:
+        dvm_list: "{{ dvm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
+      loop: "{{ reg_vm_list.virtual_machines|selectattr('guest_name','search','on-decomm-list')|rejectattr('folder','search','Templates|vcenter|vCenter')|list }}"
+      loop_control:
+        loop_var: vm_item
+        label: "{{ vm_item.guest_name }}"
     no_log: yes
     when:
       - build_list_rs|default(false)
+  - ansible.builtin.include_tasks:
+      file: task_populate_created_date.yml
+      apply:
+        vars:
+          curr_folder: "{{ vm_item.vm_folder }}"
+          curr_vm: "{{ vm_item.vm_name }}"
+          curr_uuid: "{{ vm_item.vm_uuid }}"
+    loop: "{{ dvm_list|sort(attribute='vm_folder') }}"
+    loop_control:
+      loop_var: vm_item
   - name: initialize list of offline VMs
     ansible.builtin.set_fact:
       offline_vm_list: []
@@ -47,7 +65,6 @@
     loop: "{{ vm_list|sort(attribute='vm_folder') }}"
     loop_control:
       loop_var: vm_item
-
   delegate_to: localhost
   run_once: yes
   tags: ['remove_snapshots']

@@ -13,7 +13,7 @@
         state: present
         attributes:
           - name: date-created
-            value: "{{ reg_snaps_info.instance.config.createDate|split('T')|first }}"
+            value: "{{ reg_var.instance.config.createDate|split('T')|first }}"
         validate_certs: no
       register: reg_add_attribute
   rescue:
