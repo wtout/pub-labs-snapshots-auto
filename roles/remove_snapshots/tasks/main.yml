@@ -48,7 +48,7 @@
           curr_folder: "{{ vm_item.vm_folder }}"
           curr_vm: "{{ vm_item.vm_name }}"
           curr_uuid: "{{ vm_item.vm_uuid }}"
-    loop: "{{ dvm_list|sort(attribute='vm_folder') }}"
+    loop: "{{ dvm_list|default([])|sort(attribute='vm_folder') }}"
     loop_control:
       loop_var: vm_item
   - name: initialize list of offline VMs
@@ -62,7 +62,7 @@
           curr_folder: "{{ vm_item.vm_folder }}"
           curr_vm: "{{ vm_item.vm_name }}"
           curr_uuid: "{{ vm_item.vm_uuid }}"
-    loop: "{{ vm_list|sort(attribute='vm_folder') }}"
+    loop: "{{ vm_list|default([])|sort(attribute='vm_folder') }}"
     loop_control:
       loop_var: vm_item
   delegate_to: localhost
