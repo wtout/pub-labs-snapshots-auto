@@ -20,6 +20,7 @@ check_docker_login
 restart_docker
 git_config
 [[ "$(git config --file .git/config user.email|cut -d '@' -f1)" != "watout" ]] && image_prune
+pull_image &>/dev/null
 start_container "${CONTAINERNAME}" &>/dev/null
 if [[ -z ${MYINVOKER+x} ]]
 then

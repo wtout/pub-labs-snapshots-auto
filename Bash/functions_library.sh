@@ -183,6 +183,10 @@ function check_image() {
 	return ${?}
 }
 
+function pull_image() {
+	$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json
+}
+
 function check_container() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
