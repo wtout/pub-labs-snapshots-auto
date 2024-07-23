@@ -184,7 +184,26 @@ function check_image() {
 }
 
 function pull_image() {
-	$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json
+	local MYRELEASE
+	MYRELEASE=$(get_os)
+	case ${MYRELEASE} in
+		CentOS*)
+			$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}"
+			;;
+		AlmaLinux*)
+			if [[ -f ${HOME}/.podman/auth.json ]]
+			then
+				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json
+			else
+				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${XDG_RUNTIME_DIR}/containers/auth.json
+			fi
+			;;
+		Ubuntu*)
+			$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json
+			;;
+		*)
+			;;
+	esac
 }
 
 function check_container() {
