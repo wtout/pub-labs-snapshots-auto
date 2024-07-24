@@ -46,7 +46,6 @@ NUM_HOSTSINPLAY=$([[ "$(get_hostsinplay "${CONTAINERNAME}_1" "${HL}" | wc -w)" !
 add_write_permission "${PWD}/roles"
 add_write_permission "${PWD}/roles/*"
 add_write_permission "${PWD}/roles/*/files"
-add_write_permission "${PWD}/vars"
 enable_logging "${CONTAINERNAME}_2" "${@}"
 start_container "${CONTAINERNAME}_2" &>/dev/null
 kill_container "${CONTAINERNAME}_1" &>/dev/null

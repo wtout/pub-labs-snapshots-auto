@@ -22,6 +22,7 @@ git_config
 [[ "$(git config --file .git/config user.email|cut -d '@' -f1)" != "watout" ]] && image_prune
 pull_image &>/dev/null
 start_container "${CONTAINERNAME}" &>/dev/null
+add_write_permission "${PWD}/vars"
 if [[ -z ${MYINVOKER+x} ]]
 then
 	get_repo_creds "${CONTAINERNAME}" "${REPOVAULT}" Bash/get_repo_vault_pass.sh
