@@ -1,0 +1,20 @@
+---
+# Tasks to update the VM description
+- block:
+    - name: Update {{ vm_name }} description/note
+      community.vmware.vmware_guest:
+        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+        datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+        uuid: "{{ vm_uuid }}"
+        annotation: "== IMPORTANT NOTE ==\nTHIS VM IS ON OUR DECOMMISSION LIST AND WILL BE DELETED ON\ndate-todecomm DATE. REACH OUT TO pae-labs@cisco.com IF IT\nWAS MARKED FOR DECOMM IN ERROR BEFORE THAT DATE\n{{ vm_dtd }}{{ ('\nipaddress: ' + vm_ip) if vm_ip != '' else '' }}"
+        validate_certs: no
+      register: reg_update_note
+      no_log: yes
+  rescue:
+    - ansible.builtin.debug:
+        msg: "{{ reg_update_note }}"
+  always:
+    - ansible.builtin.assert:
+        that: reg_update_note is succeeded

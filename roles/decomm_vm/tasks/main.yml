@@ -1,0 +1,14 @@
+---
+# Tasks for decomm_vm
+- block:
+  - ansible.builtin.include_role:
+      name: remove_snapshots
+      tasks_from: task_get_date_time.yml
+    when:
+      - ansible_date_time.date is not defined
+      - ansible_date_time.date|default('') == ''
+  - ansible.builtin.include_tasks: task_process_poweredon_vm.yml
+  - ansible.builtin.include_tasks: task_process_poweredoff_vm.yml
+  delegate_to: localhost
+  run_once: yes
+  tags: ['decomm_vm']
