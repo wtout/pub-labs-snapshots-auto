@@ -21,11 +21,11 @@
       when:
         - delete_creds | default(false) | bool
         - not ansible_check_mode
-    - fail:
+    - ansible.builtin.fail:
         msg:
           - "{{ err_msg | default('') }}"
     when:
       - abort_play | default(false) | bool
   delegate_to: localhost
   run_once: true
-  tags: always
+  tags: ['always', 'check_creds']

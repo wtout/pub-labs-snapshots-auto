@@ -13,7 +13,7 @@
     check_mode: no
     become: yes
   - name: Get playbook status from {{ LFILE }}
-    ansible.builtin.shell: "grep 'PLAY RECAP' {{ LFILE }} &>/dev/null && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS }}p' | grep -v awk | grep -E 'PLAY RECAP|(unreachable|failed)=[1-9]+' || echo 'No Play Recap found'"
+    ansible.builtin.shell: "grep 'PLAY RECAP' {{ LFILE }} >/dev/null 2>&1 && sed -n '/PLAY RECAP /,/=====/{/=====/!p;}' {{ LFILE }} | grep -E 'PLAY RECAP|(unreachable|failed)=[1-9]+' || echo 'No Play Recap found'"
     register: playbook_status
   - name: define execution status
     ansible.builtin.set_fact:
@@ -40,15 +40,15 @@
     ignore_errors: true
   - name: Get playbook execution time from {{ LFILE }}
     ansible.builtin.shell: |
-      grep 'PLAY RECAP' {{ LFILE }} >/dev/null 2>&1 && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep '*' >/dev/null 2>&1 && sed -n '/PLAY RECAP /{h;b};H;${x;p}' {{ LFILE }} | sed -n '/PLAY RECAP /,+{{ NHOSTS|int + 2 }}p' | grep -vE 'awk|RECAP|===' | grep -E '.[0-9]{,3} \*{3,}' | tail -1 | awk '{print $(NF - 1)}' || echo 'No Execution time found'
+      grep 'PLAY RECAP' {{ LFILE }} >/dev/null 2>&1 && sed -n '/PLAY RECAP /,/===/{//!p;}' {{ LFILE }} | grep -E '[0-9]{2}.[0-9]{,3} \*{3,}' >/dev/null 2>&1 && sed -n '/PLAY RECAP /,/===/{//!p;}' {{ LFILE }} | grep -E '[0-9]{2}.[0-9]{,3} \*{3,}' | awk '{print $(NF - 1)}' || echo 'No Execution time found'
     register: playbook_execution
   - name: define playbook_time
     ansible.builtin.set_fact:
-      playbook_time: "{{ playbook_time|default('') + ' ' + time_item.0|regex_replace('^0*', '') + time_item.1 }}"
+      playbook_time: "{{ playbook_time|default('') + ' ' + (time_item.0 + time_item.1)|regex_replace('^0(h|m)','')|regex_replace('^00.','0.') }}"
     loop: "{{ playbook_execution.stdout.split(':')|zip([ 'h', 'm', 's' ])|list }}"
     loop_control:
       loop_var: time_item
-    when: time_item.0|int != 0
+    when: time_item.0|float != 0
   - name: define MSG_STATS
     ansible.builtin.set_fact:
       MSG_STATS: "{{ MSG_STATS | default ([]) + [loop_item] }}"
@@ -86,7 +86,7 @@
       - "{{ user_abort.stdout if user_abort is succeeded else '' }}"
       - "{{ playbook_status.stdout | regex_replace ('[\\*]*', '') | regex_replace ('[^\\.]* PLAY RECAP', '**PLAY RECAP**\n') | regex_replace ('((unreachable=|failed=)[1-9]+)', '**`\\1`**') | regex_replace ('\n.*[\\|] ', '\n') if (fe != '' or playbook_status.stdout == 'No Play Recap found') else '' }}"
       - ''
-      - "The log file is **`{{ AUTOHOME }}/Logs/{{ LFILE|basename }}`**"
+      - "The log file is **`{{ lookup('env', 'MYHOME') }}/Logs/{{ LFILE|basename }}`**"
       - ''
       - '========================================================='
     loop_control:

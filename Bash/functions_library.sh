@@ -1,5 +1,24 @@
 # Functions declaration
 
+function kill_sub_processes() {
+	local pid
+	local and_self
+	local children
+	pid="${1}"
+	and_self="${2:-false}"
+	if children=($(pgrep -P "${pid}"))
+	then
+		for child in "${children[@]}"
+		do
+			kill_sub_processes "${child}" true
+		done
+	fi
+	if [[ "${and_self}" == true ]]
+	then
+		[[ "$(ps -o pid | grep ${pid})" != "" ]] && kill -9 "${pid}"
+	fi
+}
+
 function create_dir() {
 	if [[ ! -d "${1}" ]]
 	then
@@ -153,7 +172,7 @@ function docker_cmd() {
 			fi
 			;;
 		AlmaLinux*|Ubuntu*)
-			echo "docker"
+			echo "podman"
 			;;
 		*)
 			;;
@@ -190,22 +209,24 @@ function pull_image() {
 		MYRELEASE=$(get_os)
 		case ${MYRELEASE} in
 			CentOS*)
-				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}"
+				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				;;
 			AlmaLinux*)
 				if [[ -f ${HOME}/.podman/auth.json ]]
 				then
-					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json
+					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				else
-					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${XDG_RUNTIME_DIR}/containers/auth.json
+					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${XDG_RUNTIME_DIR}/containers/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				fi
 				;;
 			Ubuntu*)
-				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json
+				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				;;
 			*)
 				;;
 		esac
+		[[ $(grep -i "error" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr) != "" ]] &>/dev/null && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr && echo -e "\nCheck if the container image ${BOLD}${CONTAINERREPO}:${ANSIBLE_VERSION}${NORMAL} exists\n" && exit 1
+		rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 	fi
 }
 
@@ -222,13 +243,13 @@ function start_container() {
 	if [[ $(check_container "${CNTNRNAME}"; echo "${?}") -ne 0 ]]
 	then
 		[[ ! -d ${HOME}/.ssh ]] && mkdir ${HOME}/.ssh
-		echo "Starting container ${CNTNRNAME}"
+		[[ $- =~ x ]] && debug=1 && echo "Starting container ${CNTNRNAME}"
 		[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 		if [[ "${ANSIBLE_LOG_PATH}" == "" ]]
 		then
-			$(docker_cmd) run --rm -e MYPROXY=${PROXY_ADDRESS} -e MYHOME=${HOME} -e MYHOSTNAME=$(hostname) -e MYCONTAINERNAME=${CNTNRNAME} -e MYIP=$(get_host_ip) --user ansible -w ${CONTAINERWD} -v /data:/data:z -v /tmp:/tmp:z -v ${PWD}:${CONTAINERWD}:z --name ${CNTNRNAME} -t -d --entrypoint /bin/bash ${CONTAINERREPO}:${ANSIBLE_VERSION}
+			$(docker_cmd) run --rm -e MYPROXY=${PROXY_ADDRESS} -e MYHOME=${PWD} -e MYHOSTNAME=$(hostname) -e MYCONTAINERNAME=${CNTNRNAME} -e MYIP=$(get_host_ip) --user ansible -w ${CONTAINERWD} -v /data:/data:z -v /tmp:/tmp:z -v ${PWD}:${CONTAINERWD}:z --name ${CNTNRNAME} -t -d --entrypoint /bin/bash ${CONTAINERREPO}:${ANSIBLE_VERSION} 1>/dev/null
 		else
-			$(docker_cmd) run --rm -e ANSIBLE_LOG_PATH=${ANSIBLE_LOG_PATH} -e ANSIBLE_FORKS=${NUM_HOSTSINPLAY} -e MYPROXY=${PROXY_ADDRESS} -e MYHOME=${HOME} -e MYHOSTNAME=$(hostname) -e MYCONTAINERNAME=${CNTNRNAME} -e MYIP=$(get_host_ip) -e MYHOSTOS=$(get_os) --user ansible -w ${CONTAINERWD} -v /data:/data:z -v /tmp:/tmp:z -v ${HOME}/.ssh:/home/ansible/.ssh:z -v ${PWD}:${CONTAINERWD}:z --name ${CNTNRNAME} -t -d --entrypoint /bin/bash ${CONTAINERREPO}:${ANSIBLE_VERSION}
+			$(docker_cmd) run --rm -e ANSIBLE_LOG_PATH=${ANSIBLE_LOG_PATH} -e ANSIBLE_FORKS=${NUM_HOSTSINPLAY} -e MYPROXY=${PROXY_ADDRESS} -e MYHOME=${PWD} -e MYHOSTNAME=$(hostname) -e MYCONTAINERNAME=${CNTNRNAME} -e MYIP=$(get_host_ip) -e MYHOSTOS=$(get_os) --user ansible -w ${CONTAINERWD} -v /data:/data:z -v /tmp:/tmp:z -v ${HOME}/.ssh:/home/ansible/.ssh:z -v ${PWD}:${CONTAINERWD}:z --name ${CNTNRNAME} -t -d --entrypoint /bin/bash ${CONTAINERREPO}:${ANSIBLE_VERSION} 1>/dev/null
 		fi
 		[[ ${debug} == 1 ]] && set -x
 		[[ $(check_container "${CNTNRNAME}"; echo "${?}") -ne 0 ]] && echo "Unable to start container ${CNTNRNAME}" && exit 1
@@ -237,11 +258,18 @@ function start_container() {
 
 function kill_container() {
 	local CNTNRNAME
+	local dc
 	CNTNRNAME="${1}"
+	dc=$(docker_cmd)
 	if [[ $(check_container "${CNTNRNAME}"; echo "${?}") -eq 0 ]]
 	then
-		echo "Killing container ${CNTNRNAME}"
-		$(docker_cmd) kill ${CNTNRNAME} &>/dev/null
+		[[ $- =~ x ]] && debug=1 && echo "Killing container ${CNTNRNAME}"
+		if [[ "${dc}" == "podman" ]]
+		then
+			${dc} container rm ${CNTNRNAME} &>/dev/null
+		else
+			${dc} kill ${CNTNRNAME} &>/dev/null
+		fi
 	fi
 }
 
@@ -337,11 +365,16 @@ function git_config() {
 			NAME=$(git config --file .git/config user.name | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
 			SURNAME=$(git config --file .git/config user.name | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
 			read -rp "Enter your email address [ENTER]: " GIT_EMAIL_ADDRESS
-			if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]] && [[ "${GIT_EMAIL_ADDRESS}" != "" ]] && ([[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:2} | tr '[:upper:]' '[:lower:]')"* ]] || [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:1} | tr '[:upper:]' '[:lower:]')"* ]]) && [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]]
+			if [[ -z "$(echo "${GIT_EMAIL_ADDRESS}"|grep -E '<|>')" ]]
 			then
-				git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" && git config --file .git/config remote.origin.url "$(git config --file .git/config remote.origin.url | sed -e "s|//\(\w\)|//$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)@\1|")" || EC=1
+				if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]] && [[ -n "${GIT_EMAIL_ADDRESS}" ]] && ([[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:2} | tr '[:upper:]' '[:lower:]')"* ]] || [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:1} | tr '[:upper:]' '[:lower:]')"* ]]) && [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]]
+				then
+					git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" && git config --file .git/config remote.origin.url "$(git config --file .git/config remote.origin.url | sed -e "s|//\(\w\)|//$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)@\1|")" || EC=1
+				else
+					[[ "$(git config --file .git/config remote.origin.url)" == *"$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)"* ]] && git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" || EC=1
+				fi
 			else
-				[[ "$(git config --file .git/config remote.origin.url)" == *"$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)"* ]] && git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" || EC=1
+				git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" || EC=1
 			fi
 		fi
 		[[ ${EC} -eq 1 ]] && echo "Invalid email address. Aborting!" && exit ${EC}
@@ -409,6 +442,13 @@ function add_write_permission() {
 	for i in ${*}
 	do
 		sudo chmod o+w ${i}
+	done
+}
+
+function remove_write_permission() {
+	for i in ${*}
+	do
+		sudo chmod o-w ${i}
 	done
 }
 
@@ -515,22 +555,22 @@ function get_host_ip() {
 function encrypt_vault() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault encrypt "${2}" --vault-password-file "${3}" &>"${ANSIBLE_LOG_LOCATION}"/encrypt_error."${PID}"
-	if [[ -s "${ANSIBLE_LOG_LOCATION}/encrypt_error.${PID}" && "$(grep 'ERROR' "${ANSIBLE_LOG_LOCATION}/encrypt_error.${PID}")" != "" ]]
+	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault encrypt "${2}" --vault-password-file "${3}" &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr
+	if [[ -s "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr && "$(grep 'ERROR' "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr)" != "" ]]
 	then
-		cat "${ANSIBLE_LOG_LOCATION}"/encrypt_error."${PID}"
+		cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr
 		exit 1
 	else
-		rm "${ANSIBLE_LOG_LOCATION}"/encrypt_error."${PID}"
+		rm "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr
 	fi
 }
 
 function view_vault() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>"${ANSIBLE_LOG_LOCATION}"/decrypt_error."${PID}"
-	[[ $(grep "was not found" "${ANSIBLE_LOG_LOCATION}"/decrypt_error."${PID}") != "" ]] && sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" &>/dev/null
-	rm -f "${ANSIBLE_LOG_LOCATION}"/decrypt_error."${PID}"
+	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
+	[[ $(grep "was not found" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" &>/dev/null
+	rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
 }
 
 function get_repo_creds() {
@@ -558,8 +598,65 @@ function get_repo_creds() {
 			echo
 			echo "Unable to get repo credentials"
 			echo
-			[[ -z ${MYINVOKER+x} ]] && kill_container && exit 1
+			[[ -z ${MYINVOKER+x} ]] && kill_container "${CNTNRNAME}" && exit 1
 		fi
+	fi
+}
+
+function read_repo_cred() {
+	local CNTNRNAME
+	local REPOCRED
+	CNTNRNAME="${1}"
+	read -r REPOCRED <<< "$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep $(echo ${4//REPO/}) | cut -d "'" -f2)"
+	echo "${REPOCRED}"
+}
+
+function get_secrets_vault() {
+	if [[ ! -f ${PASSVAULT} ]]
+	then
+		local CNTNRNAME
+		local REPOUSER
+		local REPOPASS
+		local REMOTEURL
+		local localbranch
+		local remotebranchlist
+		CNTNRNAME="${1}"
+		localbranch=$(git branch|grep '^*'|awk '{print $NF}')
+		[[ -z ${localbranch} ]] && echo "Unable to determine the current branch. Exiting!" && exit 1
+		remotebranchlist=$(git branch -r)
+		if [[ $(echo ${remotebranchlist}|grep '/'${localbranch}) ]]
+		then
+			[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
+			REPOUSER=$(read_repo_cred "${CNTNRNAME}" "${2}" "${3}" "REPOUSER")
+			REPOPASS=$(read_repo_cred "${CNTNRNAME}" "${2}" "${3}" "REPOPASS")
+			REPOPWD="${REPOPASS//@/%40}"
+			[[ "$(git config --file .git/config --get remote.origin.url | grep '\/\/.*@')" == "" ]] && REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}:${REPOPWD}@\1|") || REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//.*@|//${REPOUSER}:${REPOPWD}@|")
+			for i in {1..3}
+			do
+				git clone --branch ${localbranch} --single-branch "$(echo "${REMOTEURL}" | sed -e "s|pub-||" -e "s|auto|auto-secrets|")" .tmp &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr
+				[[ ${?} -eq 0 ]] && break || CLONE_FAILED="true"
+			done
+			if [[ "${CLONE_FAILED}" ]]
+			then
+				[[ "$(grep 'Invalid username or password' "${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr)" != '' ]] && rm -f "${REPOVAULT}"
+				echo -e "${BOLD}Unable to download the secrets vault${NORMAL}" && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr && EC=1
+			fi
+			rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr
+			[[ ${EC} == 1 ]] && exit ${EC}
+			[[ ${debug} == 1 ]] && set -x
+			mv .tmp/$(echo "${PASSVAULT##*/}") vars/
+			rm -rf .tmp
+		else
+			echo "Unable to clone branch "${localbranch}" of the secrets vault. Exiting!"
+			exit 1
+		fi
+	fi
+}
+
+function remove_secrets_vault() {
+	if [[ -f "${PASSVAULT}" ]]
+	then
+		rm -f "${PASSVAULT}"
 	fi
 }
 
@@ -590,9 +687,9 @@ function check_updates() {
 					[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 					if [[ ${REPOUSER} == "" || ${REPOPASS} == "" ]]
 					then
+						REPOUSER=$(read_repo_cred "${CNTNRNAME}" "${2}" "${3}" "REPOUSER")
+						REPOPASS=$(read_repo_cred "${CNTNRNAME}" "${2}" "${3}" "REPOPASS")
 						[[ ${debug} == 1 ]] && set -x
-						read -r REPOUSER <<< "$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep USER | cut -d "'" -f2)"
-						read -r REPOPASS <<< "$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep PASS | cut -d "'" -f2)"
 					else
 						break
 					fi
@@ -603,7 +700,7 @@ function check_updates() {
 				local REPOPWD
 				local REMOTEURL
 				local REMOTEID
-				[[ "$(git config --file .git/config --get remote.origin.url | grep 'wwwin-github')" != "" ]] && [[ ${PROXY_ADDRESS} != "" ]] && SET_PROXY="true"
+				[[ "$(git config --file .git/config --get remote.origin.url | grep 'github')" != "" ]] && [[ ${PROXY_ADDRESS} != "" ]] && SET_PROXY="true"
 				for i in {1..3}
 				do
 					[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
@@ -638,9 +735,11 @@ function check_updates() {
 					if [[ "${ANSWER,,}" == "y" ]]
 					then
 						git reset -q --hard origin/"${localbranch}"
+						[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 						git pull "$(git config --file .git/config --get remote.origin.url | sed -e "s|\(//.*\)@|\1:${REPOPASS}@|")" "${localbranch}" &>"${PWD}"/.pullerr && sed -i "s|${REPOPASS}|xxxxx|" "${PWD}"/.pullerr
 						[[ ${?} == 0 ]] && echo -e "\nThe installation package has been updated. ${BOLD}Please re-run the script for the updates to take effect${NORMAL}\n\n" && EC='return 3'
 						[[ ${?} != 0 ]] && echo -e "\nThe installation package update has failed with the following error:\n\n${BOLD}$(cat "${PWD}"/.pullerr)${NORMAL}\n\n" && EC='exit'
+						[[ ${debug} == 1 ]] && set -x
 						rm -f "${PWD}"/.pullerr
 					else
 						EC=':'
@@ -732,23 +831,29 @@ function run_playbook() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
 	ANSIBLE_CMD_ARGS=$(echo "${@}" | sed "s/${CNTNRNAME} //")
-	if [[ ${GET_INVENTORY_STATUS} == 0 ]]
+	if [[ "${GET_INVENTORY_STATUS}" -eq 0 ]]
 	then
-		### Begin: Determine if ASK_PASS is required
-		$(docker_cmd) exec -i ${CNTNRNAME} ansible "${HL}" -m debug -a 'msg={{ ansible_ssh_pass }}' &>/dev/null && [[ ${?} == 0 ]] && ASK_PASS=''
-		### End
 		### Begin: Define the extra-vars argument list
 		local EVARGS
 		EVARGS="{SVCFILE: '${SVCVAULT}', $(basename "${0}" | sed -e 's/\(.*\)\.sh/\1/'): true}"
+		### End
+		### Begin: Determine if ASK_PASS is required
+		if [[ "$(echo "${HL}" | grep -v 'vcenter')" == "" ]]
+		then
+			ASK_PASS=''
+		else
+			$(docker_cmd) exec -i ${CNTNRNAME} ansible -i "${INVENTORY_PATH}" "$(echo "${HL}" | grep -v 'vcenter')" -m debug -a 'msg={{ ansible_ssh_pass }}' --extra-vars "${EVARGS}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh &>/dev/null && [[ ${?} == 0 ]] && ASK_PASS='' || ASK_PASS='--ask-pass'
+		fi
+		### End
 		if [[ -z ${MYINVOKER+x} ]]
 		then
-			$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
+			$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr
 		else
-			$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr 1>/dev/null
+			$(docker_cmd) exec -e MYINVOKER="${MYINVOKER}" -t ${CNTNRNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr 1>/dev/null
 		fi
-		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr | grep  "${SVCVAULT}") != "" ]] && echo -e "\nUnable to decrypt ${BOLD}${SVCVAULT}${NORMAL}" && EC=1
-		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr) == "" ]] && [[ $(grep -i warning "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr) == '' ]] && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
-		rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}".stderr
+		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr | grep "${SVCVAULT}") != "" ]] && echo -e "\nUnable to decrypt ${BOLD}${SVCVAULT}${NORMAL}" && EC=1
+		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr) == "" ]] && [[ $(grep -i warning "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr) == '' ]] && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr
+		rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr
 		[[ ${EC} == 1 ]] && exit 1
 	fi
 }
@@ -771,12 +876,12 @@ function send_notification() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
 	ANSIBLE_CMD_ARGS=$(echo "${@}" | sed "s/${CNTNRNAME} //")
-	if [[ "$(check_mode "${@}")" == " " ]]
+	if [[ "$(check_mode "${ANSIBLE_CMD_ARGS}")" == " " ]]
 	then
 		SCRIPT_ARG="${ANSIBLE_CMD_ARGS//-/dash}"
 		# Send playbook status notification
 		NOTIF_ARGS=$(echo "${ANSIBLE_CMD_ARGS}" | tr ' ' '\n' | sed -e '/--tags\|-t\|--limit\|-l\|--envname/,+1d' | tr '\n' ' ')
-		$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}', NHOSTS: '${NUM_HOSTSINPLAY}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{AUTOHOME: '${PWD}'}" ${NOTIF_ARGS} -v &>/dev/null
+		$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" ${NOTIF_ARGS} -v #&>/dev/null
 		SCRIPT_STATUS=${?}
 	fi
 }

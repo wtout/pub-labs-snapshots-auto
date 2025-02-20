@@ -23,11 +23,11 @@ On a newly installed Linux **CentOS 7.7+/AlmaLinux8+** VM that has docker instal
 
 6- Download the Ansible automation package
 
-    $> git clone https://wwwin-github.cisco.com/cms-pae/pae-labs-snapshots-auto.git
+    $> git clone https://github.com/wtout/pub-labs-snapshots-auto.git
 
-7- Go to the newly cloned pae-labs-linux-auto directory
+7- Go to the newly cloned pub-labs-linux-auto directory
 
-    $> cd pae-labs-snapshots-auto
+    $> cd pub-labs-snapshots-auto
 
 ***Note**: you might need to disable the proxy to be able to clone the repository*
 
@@ -44,14 +44,14 @@ The system definition file consists of the following variables:
   - **datacenter.primary.max_snapshot_age** (_Integer_): Required. Snapshots maximum age
   - **datacenter.primary.vm_age** (_Integer_): Required. Virtual Machine age
 
-To create the system inventory without deploying the system, issue the following command from the automation root directory (pae-labs-snapshots-auto):
+To create the system inventory without deploying the system, issue the following command from the automation root directory (pub-labs-snapshots-auto):
 
     $> bash Bash/play_deploy.sh --envname <system-name> --tags none
 
 
 ### System Deployment ###
 
-1- From the automation root directory (pae-labs-snapshots-auto), run the bash script under the Bash directory.
+1- From the automation root directory (pub-labs-snapshots-auto), run the bash script under the Bash directory.
 
     $> bash Bash/play_deploy.sh --envname <system-name>
 

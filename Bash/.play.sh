@@ -22,16 +22,15 @@ check_deffile
 set -- && set -- "${@}" "${NEW_ARGS}"
 for cnum in {1..3}
 do
-	check_container "${CONTAINERNAME}_${cnum}" && kill_container "${CONTAINERNAME}_${cnum}" &>/dev/null
+	check_container "${CONTAINERNAME}_${cnum}" && kill_container "${CONTAINERNAME}_${cnum}"
 done
-start_container "${CONTAINERNAME}_1" &>/dev/null
+start_container "${CONTAINERNAME}_1"
 [[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 chmod 644 "${PASSVAULT}"
 PCREDS_LIST=$(get_creds "${CONTAINERNAME}_1" primary)
 PROXY_ADDRESS=$(get_proxy) || PA=${?}
 [[ ${PA} -eq 1 ]] && echo -e "\n${PROXY_ADDRESS}\n" && exit ${PA}
 [[ ${debug} == 1 ]] && set -x
-add_write_permission ${PWD}/vars
 [[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 rm -f "${SVCVAULT}"; umask 0022; touch "${SVCVAULT}"
 [[ "$(echo ${PCREDS_LIST})" != "" ]] && echo "${PCREDS_LIST[@]}" | sed "s/$(get_creds_prefix primary)/P/g; s/^\(.*: \)\(.*\)$/\1'\2'/g" >> "${SVCVAULT}"
@@ -43,16 +42,13 @@ sudo chmod 644 "${SVCVAULT}"
 get_inventory "${CONTAINERNAME}_1" "${@}"
 get_hosts "${CONTAINERNAME}_1" "${@}"
 NUM_HOSTSINPLAY=$([[ "$(get_hostsinplay "${CONTAINERNAME}_1" "${HL}" | wc -w)" != "0" ]] && get_hostsinplay "${CONTAINERNAME}_1" "${HL}" | wc -w || echo "1")
-add_write_permission "${PWD}/roles"
-add_write_permission "${PWD}/roles/*"
-add_write_permission "${PWD}/roles/*/files"
 enable_logging "${CONTAINERNAME}_2" "${@}"
-start_container "${CONTAINERNAME}_2" &>/dev/null
-kill_container "${CONTAINERNAME}_1" &>/dev/null
+start_container "${CONTAINERNAME}_2"
+kill_container "${CONTAINERNAME}_1"
 run_playbook "${CONTAINERNAME}_2" "${@}"
 disable_logging
-start_container "${CONTAINERNAME}_3" &>/dev/null
-kill_container "${CONTAINERNAME}_2" &>/dev/null
+start_container "${CONTAINERNAME}_3"
+kill_container "${CONTAINERNAME}_2"
 send_notification "${CONTAINERNAME}_3" "${ORIG_ARGS}"
-kill_container "${CONTAINERNAME}_3" &>/dev/null
+kill_container "${CONTAINERNAME}_3"
 exit ${SCRIPT_STATUS}
