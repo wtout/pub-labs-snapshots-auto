@@ -881,7 +881,7 @@ function send_notification() {
 		SCRIPT_ARG="${ANSIBLE_CMD_ARGS//-/dash}"
 		# Send playbook status notification
 		NOTIF_ARGS=$(echo "${ANSIBLE_CMD_ARGS}" | tr ' ' '\n' | sed -e '/--tags\|-t\|--limit\|-l\|--envname/,+1d' | tr '\n' ' ')
-		$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" ${NOTIF_ARGS} -v #&>/dev/null
+		$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" ${NOTIF_ARGS} -v &>/dev/null
 		SCRIPT_STATUS=${?}
 	fi
 }
