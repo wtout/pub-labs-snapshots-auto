@@ -1,15 +1,20 @@
-# This is a basic workflow that is automatically triggered
-
 name: Sync Repos
 
 # Controls when the action will run
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
 
+env:
+  MYGH_TOKEN: ${{ secrets.WASS }}
+  ORIGINAL_REPO_NAME: ${{ github.event.repository.name }}
+  ORG_NAME: ${{ github.actor }}
+
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+
   # This workflow contains a single job called "sync"
   sync:
     # The type of runner that the job will run on
@@ -17,19 +22,17 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    - name: Checkout source repository
-      uses: actions/checkout@v4
-    - name: Push to destination repository
-      run: |
-        git clone https://${{ env.ORG_NAME }}:${{ env.GITHUB_TOKEN }}@github.com/${{ env.ORG_NAME }}/pub-${{ env.ORIGINAL_REPO_NAME }}.git
-        cd pub-${{ env.ORIGINAL_REPO_NAME }}
-        git config user.email \<\>
-        git config user.name "Wassim Tout"
-        git remote add ${{ env.ORIGINAL_REPO_NAME }} https://${{ env.ORG_NAME }}:${{ env.GITHUB_TOKEN }}@github.com/${{ env.ORG_NAME }}/${{ env.ORIGINAL_REPO_NAME }}.git
-        git remote update
-        git merge ${{ env.ORIGINAL_REPO_NAME }}/master --allow-unrelated-histories -m 'Synching with private work repo' -X theirs
-        git push origin master
-      env:
-        GITHUB_TOKEN: ${{ secrets.WASS }}
-        ORIGINAL_REPO_NAME: ${{ github.event.repository.name }}
-        ORG_NAME: wtout
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Push to destination repository
+        run: |
+          git clone https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/pub-${{ env.ORIGINAL_REPO_NAME }}.git
+          cd pub-${{ env.ORIGINAL_REPO_NAME }}
+          git config user.email \<\>
+          git config user.name "Wassim Tout"
+          git remote add ${{ env.ORIGINAL_REPO_NAME }} https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/${{ env.ORIGINAL_REPO_NAME }}.git
+          git remote update
+          git merge ${{ env.ORIGINAL_REPO_NAME }}/master --allow-unrelated-histories -m 'Synching with private work repo' -X theirs
+          git push origin master

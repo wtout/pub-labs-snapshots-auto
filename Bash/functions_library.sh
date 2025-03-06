@@ -115,11 +115,8 @@ function check_docker_login() {
 		CentOS*)
 			MYJSONFILE=${AUTHFILE1}
 			;;
-		AlmaLinux*)
+		AlmaLinux*|Ubuntu*)
 			MYJSONFILE=${XDG_RUNTIME_DIR}/containers/auth.json
-			;;
-		Ubuntu*)
-			MYJSONFILE=${AUTHFILE2}
 			;;
 		*)
 			;;
@@ -143,7 +140,7 @@ function check_docker_login() {
 				unset REGISTRY_AUTH_FILE
 				LOGGEDIN=false
 			else
-				[[ $(podman login --get-login ${MYDOMAIN} &>/dev/null; echo "${?}") -ne 0 ]] && [[ $(podman login --get-login ${MYDOMAIN} --authfile ${AUTHFILE2} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
+				[[ $(podman login --get-login ${MYDOMAIN} --authfile ${MYJSONFILE} &>/dev/null; echo "${?}") -ne 0 ]] && [[ $(podman login --get-login ${MYDOMAIN} --authfile ${AUTHFILE2} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
 			fi
 		fi
 	fi
@@ -211,16 +208,13 @@ function pull_image() {
 			CentOS*)
 				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				;;
-			AlmaLinux*)
+			AlmaLinux*|Ubuntu*)
 				if [[ -f ${HOME}/.podman/auth.json ]]
 				then
 					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				else
 					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${XDG_RUNTIME_DIR}/containers/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				fi
-				;;
-			Ubuntu*)
-				$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				;;
 			*)
 				;;
@@ -569,7 +563,9 @@ function view_vault() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
 	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
-	[[ $(grep "was not found" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" &>/dev/null
+	[[ $(grep "was not found" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>/dev/null
+	[[ $(grep "Permission denied" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sudo chmod 644 "${2}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>/dev/null
+	[[ $(grep "Error" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr && exit 1
 	rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
 }
 
@@ -607,7 +603,7 @@ function read_repo_cred() {
 	local CNTNRNAME
 	local REPOCRED
 	CNTNRNAME="${1}"
-	read -r REPOCRED <<< "$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep $(echo ${4//REPO/}) | cut -d "'" -f2)"
+	REPOCRED="$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep $(echo ${4//REPO/}) | cut -d "'" -f2)"
 	echo "${REPOCRED}"
 }
 
@@ -880,7 +876,7 @@ function send_notification() {
 	then
 		SCRIPT_ARG="${ANSIBLE_CMD_ARGS//-/dash}"
 		# Send playbook status notification
-		NOTIF_ARGS=$(echo "${ANSIBLE_CMD_ARGS}" | tr ' ' '\n' | sed -e '/--tags\|-t\|--limit\|-l\|--envname/,+1d' | tr '\n' ' ')
+		NOTIF_ARGS=$(echo "${ANSIBLE_CMD_ARGS}" | tr ' ' '\n' | sed -e '/--limit\|-l\|--envname/,+1d' | tr '\n' ' ')
 		$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" ${NOTIF_ARGS} -v &>/dev/null
 		SCRIPT_STATUS=${?}
 	fi
