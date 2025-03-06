@@ -35,7 +35,7 @@ PROXY_ADDRESS=$(get_proxy) || PA=${?}
 [[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 rm -f "${SVCVAULT}"; umask 0022; touch "${SVCVAULT}"
 [[ "$(echo ${PCREDS_LIST})" != "" ]] && echo "${PCREDS_LIST[@]}" | sed "s/$(get_creds_prefix primary)/P/g; s/^\(.*: \)\(.*\)$/\1'\2'/g" >> "${SVCVAULT}" || PCREDS_EMPTY=true
-[[ ${PCREDS_EMPTY} && echo "Service creds not found" && Exit 1
+[[ ${PCREDS_EMPTY} ]] && echo "Service creds not found" && Exit 1
 [[ ${debug} == 1 ]] && set -x
 add_write_permission "${SVCVAULT}"
 encrypt_vault "${CONTAINERNAME}_1" "${SVCVAULT}" Bash/get_common_vault_pass.sh
