@@ -29,6 +29,7 @@ add_write_permission "$(find "${PWD}/roles" -type d -name files -exec dirname {}
 find "${PWD}/roles" -type d -name files -exec chmod 757 {} \;
 get_repo_creds "${CONTAINERNAME}" "${REPOVAULT}" Bash/get_repo_vault_pass.sh
 get_secrets_vault "${CONTAINERNAME}" "${REPOVAULT}" Bash/get_repo_vault_pass.sh
+[[ "${MYINVOKER}" == "" ]] && eval "$(grep MYINVOKER ${HOME}/.bashrc)"
 if [[ -z ${MYINVOKER+x} ]]
 then
 	check_updates "${CONTAINERNAME}" "${REPOVAULT}" Bash/get_repo_vault_pass.sh
