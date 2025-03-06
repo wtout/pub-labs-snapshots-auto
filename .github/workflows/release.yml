@@ -1,0 +1,128 @@
+name: Test Deployment and Create Release
+
+# Controls when the action will run
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  MYGH_TOKEN: ${{ secrets.WASS }}
+  ORIGINAL_REPO_NAME: ${{ github.event.repository.name }}
+  ORG_NAME: ${{ github.actor }}
+  REGISTRY_USER: ${{ vars.DOCKERHUB_USERNAME }}
+  REGISTRY_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+  IMAGE_REGISTRY: registry-1.docker.io
+
+jobs:
+
+  test_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Login to DockerHub
+        uses: redhat-actions/podman-login@v1
+        with:
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+      - name: Configure GIT
+        run: |
+          git config user.email \<\>
+          git config user.name "Wassim Tout"
+      - name: Create Bash/vp.sh
+        run: |
+          echo -e "#! /bin/bash\necho ansible" > Bash/vp.sh
+          chmod 755 Bash/vp.sh
+      - name: Create .repovault.yml Vault
+        run: |
+          echo -e "REPOUSER='${{ env.ORG_NAME }}'\nREPOPASS='${{ env.MYGH_TOKEN }}'" > vars/.repovault.yml
+          ansible-vault encrypt vars/.repovault.yml --vault-password-file Bash/vp.sh
+      - name: Set Ansible version
+        run: |
+          sed -i 's/6.3.0/11.1.0/' Bash/common_parameters.sh
+      - name: Create ${HOME}/certificates Directory
+        run: |
+          mkdir -p ${HOME}/certificates
+      - name: Run Test
+        run: |
+          echo 'export MYINVOKER=github' >> ~/.bashrc
+          bash -x Bash/play_deploy.sh --envname build_def_file --skip-tags $(grep -r ' tags:' roles/ | awk -F 'tags: ' '{print $NF}' | sed "s/\[\|\]\|'\|,//g" | tr ' ' '\n' | grep -ve 'always\|never\|define_inventory' | sort -u | xargs | tr ' ' ',')
+
+  create_release:
+    runs-on: ubuntu-latest
+    needs: test_deploy
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Configure GIT
+        run: |
+          git config user.email \<\>
+          git config user.name "Wassim Tout"
+          sed  -i "s|\(^.*url.*//\).*\(github.*$\)|\1${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@\2|" .git/config
+      - name: Update from Remote
+        run: |
+          git remote update
+      - name: Pull develop from remote
+        run: |
+          git pull origin develop
+      - name: Switch to master branch
+        run: |
+          git checkout master
+      - name: Pull master from remote
+        run: |
+          git pull origin master
+      - name: Test Merge
+        run: |
+          git merge --no-commit --no-ff develop --allow-unrelated-histories -X theirs && git merge --abort
+      - name: Merge develop to master
+        run: |
+          git merge develop --allow-unrelated-histories -X theirs
+      - name: Read Current Tag
+        id: tf
+        run: |
+          read -r P1 P2 P3 <<<$(git describe --abbrev=0 | tr '.' ' ')
+          echo "P1=$P1" >> $GITHUB_OUTPUT
+          echo "P2=$P2" >> $GITHUB_OUTPUT
+          echo "P3=$P3" >> $GITHUB_OUTPUT
+      - name: Determine the New Tag Fields
+        id: ntf
+        run: |
+          P1=${{ steps.tf.outputs.P1 }}
+          P2=${{ steps.tf.outputs.P2 }}
+          P3=${{ steps.tf.outputs.P3 }}
+          if [[ "${P3}" -lt 20 ]]
+          then
+            P3=$((P3 + 1))
+          elif [[ "${P2}" -lt 20 ]]
+          then
+            P3=0
+            P2=$((P2 + 1))
+          else
+            P3=0
+            P2=0
+            P1=$((P1 + 1))
+          fi
+          echo "P1=$P1" >> $GITHUB_OUTPUT
+          echo "P2=$P2" >> $GITHUB_OUTPUT
+          echo "P3=$P3" >> $GITHUB_OUTPUT
+      - name: Define New Tag
+        id: nt
+        run: |
+          P1=${{ steps.ntf.outputs.P1 }}
+          P2=${{ steps.ntf.outputs.P2 }}
+          P3=${{ steps.ntf.outputs.P3 }}
+          NEW_TAG=${P1:=0}.${P2:=0}.${P3:=0}
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_OUTPUT
+      - name: Create New Tag
+        run: |
+          git tag -a ${{ steps.nt.outputs.NEW_TAG }} -m "Create release tag ${{ steps.nt.outputs.NEW_TAG }}"
+      - name: Push to remote Repo
+        run: |
+          git push origin master
+          git push origin --tags
