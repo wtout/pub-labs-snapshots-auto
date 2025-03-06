@@ -66,28 +66,16 @@ jobs:
           git config user.email \<\>
           git config user.name "Wassim Tout"
           sed  -i "s|\(^.*url.*//\).*\(github.*$\)|\1${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@\2|" .git/config
-      - name: Update from Remote
+      - name: Fetch All Remote Updates
         run: |
           git remote update
-      - name: Pull develop from remote
+      - name: Update Local develop Branch
         run: |
           git pull origin develop
-      - name: Switch to master branch
-        run: |
-          git checkout master
-      - name: Pull master from remote
-        run: |
-          git pull origin master
-      - name: Test Merge
-        run: |
-          git merge --no-commit --no-ff develop --allow-unrelated-histories -X theirs && git merge --abort
-      - name: Merge develop to master
-        run: |
-          git merge develop --allow-unrelated-histories -X theirs
       - name: Read Current Tag
         id: tf
         run: |
-          read -r P1 P2 P3 <<<$(git describe --abbrev=0 | tr '.' ' ')
+          read -r P1 P2 P3 <<<$(git tag | sort -V | tail -1 | tr '.' ' ')
           echo "P1=$P1" >> $GITHUB_OUTPUT
           echo "P2=$P2" >> $GITHUB_OUTPUT
           echo "P3=$P3" >> $GITHUB_OUTPUT
@@ -120,10 +108,34 @@ jobs:
           P3=${{ steps.ntf.outputs.P3 }}
           NEW_TAG=${P1:=0}.${P2:=0}.${P3:=0}
           echo "NEW_TAG=$NEW_TAG" >> $GITHUB_OUTPUT
+      - name: Create a Release Branch
+        run: |
+          git checkout -b release/${{ steps.nt.outputs.NEW_TAG }} origin/develop
+      - name: Switch to master branch
+        run: |
+          git checkout master
+      - name: Update Local master Branch
+        run: |
+          git pull origin master
+      - name: Test Merge
+        run: |
+          git merge --no-commit --no-ff release/${{ steps.nt.outputs.NEW_TAG }} --allow-unrelated-histories -X theirs && git merge --abort
+      - name: Merge release/${{ steps.nt.outputs.NEW_TAG }} into master
+        run: |
+          git merge release/${{ steps.nt.outputs.NEW_TAG }} --allow-unrelated-histories -X theirs
       - name: Create New Tag
         run: |
           git tag -a ${{ steps.nt.outputs.NEW_TAG }} -m "Create release tag ${{ steps.nt.outputs.NEW_TAG }}"
-      - name: Push to remote Repo
+      - name: Push master Branch And Tags to Remote Repo
         run: |
           git push origin master
           git push origin --tags
+      - name: Switch to develop branch
+        run: |
+          git checkout develop
+      - name: Merge release/${{ steps.nt.outputs.NEW_TAG }} into develop
+        run: |
+          git merge release/${{ steps.nt.outputs.NEW_TAG }} --allow-unrelated-histories -X theirs
+      - name: Push develop Branch To Remote Repo
+        run: |
+          git push origin develop
