@@ -36,3 +36,4 @@ jobs:
           git remote update
           git merge ${{ env.ORIGINAL_REPO_NAME }}/master --allow-unrelated-histories -m 'Synching with private work repo' -X theirs
           git push origin master
+          git push origin --tags
