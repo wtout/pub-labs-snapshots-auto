@@ -72,45 +72,20 @@ jobs:
       - name: Update Local develop Branch
         run: |
           git pull origin develop
-      - name: Read Current Tag
-        id: tf
+      - name: Get The Last Tag
+        id: lt
+        uses: wtout/get-last-tag-action@v1
+      - name: Show the Action Tag
         run: |
-          read -r P1 P2 P3 <<<$(git tag | sort -V | tail -1 | tr '.' ' ')
-          echo "P1=$P1" >> $GITHUB_OUTPUT
-          echo "P2=$P2" >> $GITHUB_OUTPUT
-          echo "P3=$P3" >> $GITHUB_OUTPUT
-      - name: Determine the New Tag Fields
-        id: ntf
-        run: |
-          P1=${{ steps.tf.outputs.P1 }}
-          P2=${{ steps.tf.outputs.P2 }}
-          P3=${{ steps.tf.outputs.P3 }}
-          if [[ "${P3}" -lt 20 ]]
-          then
-            P3=$((P3 + 1))
-          elif [[ "${P2}" -lt 20 ]]
-          then
-            P3=0
-            P2=$((P2 + 1))
-          else
-            P3=0
-            P2=0
-            P1=$((P1 + 1))
-          fi
-          echo "P1=$P1" >> $GITHUB_OUTPUT
-          echo "P2=$P2" >> $GITHUB_OUTPUT
-          echo "P3=$P3" >> $GITHUB_OUTPUT
-      - name: Define New Tag
+          echo "The action tag is ${{ steps.lt.outputs.last-tag }}"
+      - name: Get The Next Tag
         id: nt
-        run: |
-          P1=${{ steps.ntf.outputs.P1 }}
-          P2=${{ steps.ntf.outputs.P2 }}
-          P3=${{ steps.ntf.outputs.P3 }}
-          NEW_TAG=${P1:=0}.${P2:=0}.${P3:=0}
-          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_OUTPUT
+        uses: wtout/get-next-tag-action@v4
+        with:
+          current-tag: ${{ steps.lt.outputs.last-tag }}
       - name: Create a Release Branch
         run: |
-          git checkout -b release/${{ steps.nt.outputs.NEW_TAG }} origin/develop
+          git checkout -b release/${{ steps.nt.outputs.next-tag }} origin/develop
       - name: Switch to master branch
         run: |
           git checkout master
@@ -119,13 +94,13 @@ jobs:
           git pull origin master
       - name: Test Merge
         run: |
-          git merge --no-commit --no-ff release/${{ steps.nt.outputs.NEW_TAG }} --allow-unrelated-histories -X theirs && git merge --abort
-      - name: Merge release/${{ steps.nt.outputs.NEW_TAG }} into master
+          git merge --no-commit --no-ff release/${{ steps.nt.outputs.next-tag }} --allow-unrelated-histories -X theirs && git merge --abort
+      - name: Merge release/${{ steps.nt.outputs.next-tag }} into master
         run: |
-          git merge release/${{ steps.nt.outputs.NEW_TAG }} --allow-unrelated-histories -X theirs
+          git merge release/${{ steps.nt.outputs.next-tag }} --allow-unrelated-histories -X theirs
       - name: Create New Tag
         run: |
-          git tag -a ${{ steps.nt.outputs.NEW_TAG }} -m "Create release tag ${{ steps.nt.outputs.NEW_TAG }}"
+          git tag -a ${{ steps.nt.outputs.next-tag }} -m "Create release tag ${{ steps.nt.outputs.next-tag }}"
       - name: Push master Branch And Tags to Remote Repo
         run: |
           git push origin master
@@ -133,9 +108,9 @@ jobs:
       - name: Switch to develop branch
         run: |
           git checkout develop
-      - name: Merge release/${{ steps.nt.outputs.NEW_TAG }} into develop
+      - name: Merge release/${{ steps.nt.outputs.next-tag }} into develop
         run: |
-          git merge release/${{ steps.nt.outputs.NEW_TAG }} --allow-unrelated-histories -X theirs
+          git merge release/${{ steps.nt.outputs.next-tag }} --allow-unrelated-histories -X theirs
       - name: Push develop Branch To Remote Repo
         run: |
           git push origin develop
