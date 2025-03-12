@@ -28,12 +28,13 @@ jobs:
           token: ${{ env.MYGH_TOKEN }}
       - name: Push to destination repository
         run: |
-          git clone https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/pub-${{ env.ORIGINAL_REPO_NAME }}.git
-          cd pub-${{ env.ORIGINAL_REPO_NAME }}
           git config user.email \<\>
           git config user.name "Wassim Tout"
-          git remote add ${{ env.ORIGINAL_REPO_NAME }} https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/${{ env.ORIGINAL_REPO_NAME }}.git
-          git remote update
-          git merge ${{ env.ORIGINAL_REPO_NAME }}/master --allow-unrelated-histories -m 'Synching with private work repo' -X theirs
-          git push origin master
-          git push origin --tags
+          git remote set-url origin https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/pub-${{ env.ORIGINAL_REPO_NAME }}.git
+          mv .git/config .
+          rm -rf .git
+          git init
+          mv config .git/
+          git add -A
+          git commit -m 'Synching with private work repo'
+          git push origin master --force
