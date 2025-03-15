@@ -22,19 +22,51 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - name: Checkout source repository
+      - name: Check out the repo
         uses: actions/checkout@v4
         with:
           token: ${{ env.MYGH_TOKEN }}
-      - name: Push to destination repository
+      - name: Configure Git
+        run: |
+          git fetch --unshallow
+      - name: Get The Commit Hash Corresponding to Tag 1.0.0
+        id: ch
+        run: |
+          echo "commid1=$(git rev-list -n 1 1.0.0)" >> $GITHUB_OUTPUT
+          echo "commid2=$(git log -1 1.0.0 | grep commit | awk '{print $2}')" >> $GITHUB_OUTPUT
+      - name: Show The Commit Hash Corresponding to Tag 1.0.0
+        run: |
+          echo "${{ steps.ch.outputs.commid1 }}"
+          echo "${{ steps.ch.outputs.commid2 }}"
+      - name: Get The Last Tag
+        id: lt
+        uses: wtout/get-last-tag-action@v1
+      - name: Configure Git
         run: |
           git config user.email \<\>
           git config user.name "Wassim Tout"
-          git remote set-url origin https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/pub-${{ env.ORIGINAL_REPO_NAME }}.git
-          mv .git/config .
-          rm -rf .git
-          git init
-          mv config .git/
+      - name: Create Orphan Branch
+        run: |
+          git checkout --orphan tempbranch ${{ steps.ch.outputs.commid1 }}
+      - name: Add And Commit All Files
+        run: |
           git add -A
-          git commit -m 'Synching with private work repo'
+          git commit -m 'Truncated history'
+      - name: Rebase Master Branch Onto Orphaned Branch
+        run: |
+          git rebase --onto tempbranch ${{ steps.ch.outputs.commid1 }} master -X theirs
+      - name: Delete Orphan Branch
+        run: |
+          git checkout master
+          git branch -D tempbranch
+      - name: Git Cleanup
+        run: |
+          git prune --progress
+          git gc --aggressive
+      - name: Configure Git With Destination Repository
+        run: |
+          git remote set-url origin https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/pub-${{ env.ORIGINAL_REPO_NAME }}.git
+      - name: Push master Branch And Tag to Destination Repository
+        run: |
           git push origin master --force
+          git push origin ${{ steps.lt.outputs.last-tag }} --force
