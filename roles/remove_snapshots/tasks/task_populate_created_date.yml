@@ -1,39 +1,41 @@
 ---
 # Tasks to populate date-created attribute of a VM in a given folder
-- block:
-  - name: get info for {{ curr_vm }} in {{ curr_folder }}
-    community.vmware.vmware_guest_info:
-      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
-      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
-      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
-      folder: "{{ curr_folder }}"
-      uuid: "{{ curr_uuid }}"
-      validate_certs: no
-    register: reg_guest_info
-    no_log: yes
-  - name: get createDate info for {{ curr_vm }} in {{ curr_folder }}
-    community.vmware.vmware_guest_info:
-      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
-      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
-      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
-      folder: "{{ curr_folder }}"
-      uuid: "{{ curr_uuid }}"
-      schema: 'vsphere'
-      properties: [
-        "config.createDate"
-      ]
-      validate_certs: no
-    register: reg_cd_info
-    until: reg_cd_info.instance.config.createDate is search('T')
-    no_log: yes
-  - ansible.builtin.include_tasks:
-      file: task_update_attribute.yml
-      apply:
-        vars:
-          reg_var: "{{ reg_cd_info }}"
+- name: Populate date-created attribute
+  block:
+    - name: Get info for {{ curr_vm + ' in ' + curr_folder }}
+      community.vmware.vmware_guest_info:
+        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+        datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+        folder: "{{ curr_folder }}"
+        uuid: "{{ curr_uuid }}"
+        validate_certs: false
+      register: reg_guest_info
+      no_log: true
+    - name: Get createDate info for {{ curr_vm + ' in ' + curr_folder }}
+      community.vmware.vmware_guest_info:
+        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+        datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+        folder: "{{ curr_folder }}"
+        uuid: "{{ curr_uuid }}"
+        schema: 'vsphere'
+        properties: [
+          "config.createDate"
+        ]
+        validate_certs: false
+      register: reg_cd_info
+      until: reg_cd_info.instance.config.createDate is search('T')
+      no_log: true
+    - name: Update attribute
+      ansible.builtin.include_tasks:
+        file: task_update_attribute.yml
+        apply:
+          vars:
+            reg_var: "{{ reg_cd_info }}"
   rescue:
-  - name: define list of problematic VMs
-    ansible.builtin.set_fact:
-      problematic_list: "{{ problematic_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+    - name: Define list of problematic VMs
+      ansible.builtin.set_fact:
+        problematic_list: "{{ problematic_list | default([]) + [curr_folder + ': ' + curr_vm] }}"

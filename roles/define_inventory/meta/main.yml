@@ -1,7 +1,7 @@
 galaxy_info:
   author: Wassim Tout
   description: Generate inventory from templates
-  company: your company (optional)
+  company: Cisco Systems
 
   # If the issue tracker for your role is not on github, uncomment the
   # next line and provide a value
@@ -14,7 +14,7 @@ galaxy_info:
   # - GPL-3.0-only
   # - Apache-2.0
   # - CC-BY-4.0
-  license: license (GPL-2.0-or-later, MIT, etc)
+  license: Giftware
 
   min_ansible_version: 6.3.0
 
@@ -50,4 +50,3 @@ galaxy_info:
 dependencies: []
   # List your role dependencies here, one per line. Be sure to remove the '[]' above,
   # if you add dependencies to this list.
-  

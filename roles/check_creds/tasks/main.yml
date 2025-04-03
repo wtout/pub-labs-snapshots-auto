@@ -1,31 +1,25 @@
 ---
 # tasks file for check_creds
-- block:
-  - include_tasks:
-      file: task_validate_vcenter_creds.yml
-      apply:
-        vars:
-          vcenter_host: "{{ task_item }}"
-    loop: "{{ groups['vcenter'] }}"
-    loop_control:
-      loop_var: task_item
-    when:
-      - groups['vcenter'] | length >= 1
-      - not abort_play | default(false) | bool
-
-  - block:
-    - name: Delete credentials
-      ansible.builtin.file:
-        path: "{{ VFILE }}"
-        state: absent
-      when:
-        - delete_creds | default(false) | bool
-        - not ansible_check_mode
-    - ansible.builtin.fail:
-        msg:
-          - "{{ err_msg | default('') }}"
-    when:
-      - abort_play | default(false) | bool
+- name: Main check_creds block
   delegate_to: localhost
   run_once: true
   tags: ['always', 'check_creds']
+  block:
+    - name: Validate Vcenter credentials
+      ansible.builtin.include_tasks:
+        file: task_validate_vcenter_creds.yml
+        apply:
+          vars:
+            vcenter_host: "{{ task_item }}"
+      loop: "{{ groups['vcenter'] }}"
+      loop_control:
+        loop_var: task_item
+      when:
+        - groups['vcenter'] | length >= 1
+        - not abort_play | default(false) | bool
+    - name: Trigger failure with an error message
+      ansible.builtin.fail:
+        msg:
+          - "{{ err_msg | default('') }}"
+      when:
+        - abort_play | default(false) | bool

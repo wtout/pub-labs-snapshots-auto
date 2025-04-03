@@ -1,66 +1,72 @@
 ---
 # Tasks for decomm_vm
-- name: define get_vm_list_dv_on
+- name: Define get_vm_list_dv_on
   ansible.builtin.set_fact:
     get_vm_list_dv_on: true
   when: reg_vm_list is not defined
-- block:
-  - ansible.builtin.include_role:
-      name: remove_snapshots
-      tasks_from: task_get_list_vms.yml
+- name: Getting list of VMs
+  when: get_vm_list_dv_on | default(false)
+  block:
+    - name: Get list of VMs
+      ansible.builtin.include_role:
+        name: remove_snapshots
+        tasks_from: task_get_list_vms.yml
   rescue:
-  - ansible.builtin.debug:
-      msg: "{{ reg_vm_list }}"
+    - name: Debug message
+      ansible.builtin.debug:
+        msg: "{{ reg_vm_list }}"
   always:
-  - ansible.builtin.assert:
-      that: reg_vm_list is succeeded
-  when:
-    - get_vm_list_dv_on|default(false)
-- name: define build_list_dv_on
+    - name: Assert that getting the list of VMs succeeded
+      ansible.builtin.assert:
+        that: reg_vm_list is succeeded
+- name: Define build_list_dv_on
   ansible.builtin.set_fact:
     build_list_dv_on: true
   when: vm_list is not defined
-- name: define list of VMs
+- name: Define list of VMs
   ansible.builtin.set_fact:
-    vm_list: "{{ vm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
-  loop: "{{ reg_vm_list.virtual_machines|rejectattr('guest_name','search','on-decomm-list|stCtlVM-')|rejectattr('folder','search','Templates|vcenter|vCenter')|list }}"
+    vm_list: "{{ vm_list | default([]) + [{'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
+  loop: "{{ reg_vm_list.virtual_machines | rejectattr('guest_name', 'search', 'on-decomm-list|stCtlVM-') | \
+    rejectattr('folder', 'search', 'Templates|vcenter|vCenter') | list }}"
   loop_control:
     loop_var: vm_item
     label: "{{ vm_item.guest_name }}"
-  no_log: yes
+  no_log: true
   when:
-    - build_list_dv_on|default(false)
-- name: define build_decomm_list_dv_on
+    - build_list_dv_on | default(false)
+- name: Define build_decomm_list_dv_on
   ansible.builtin.set_fact:
     build_decomm_list_dv_on: true
   when: vm_on_decomm_list is not defined
-- name: define list of VMs to be decommissioned
+- name: Define list of VMs to be decommissioned
   ansible.builtin.set_fact:
-    vm_on_decomm_list: "{{ vm_on_decomm_list|default([]) + [{ 'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
-  loop: "{{ reg_vm_list.virtual_machines|selectattr('guest_name','search','on-decomm-list')|list }}"
+    vm_on_decomm_list: "{{ vm_on_decomm_list | default([]) + [{'vm_folder': vm_item.folder, 'vm_name': vm_item.guest_name, 'vm_uuid': vm_item.uuid}] }}"
+  loop: "{{ reg_vm_list.virtual_machines | selectattr('guest_name', 'search', 'on-decomm-list') | list }}"
   loop_control:
     loop_var: vm_item
     label: "{{ vm_item.guest_name }}"
-  no_log: yes
+  no_log: true
   when:
-    - build_decomm_list_dv_on|default(false)
-- include_tasks:
+    - build_decomm_list_dv_on | default(false)
+- name: Decommission powered on VM
+  ansible.builtin.include_tasks:
     file: task_decommission_poweredon_vm.yml
     apply:
       vars:
         curr_folder: "{{ vm_item.vm_folder }}"
         curr_vm: "{{ vm_item.vm_name }}"
         curr_uuid: "{{ vm_item.vm_uuid }}"
-  loop: "{{ vm_list|sort(attribute='vm_folder') }}"
+  loop: "{{ vm_list | sort(attribute='vm_folder') }}"
   loop_control:
     loop_var: vm_item
-- include_tasks:
+- name: Decommission powered on VM
+  ansible.builtin.include_tasks:
     file: task_decommission_poweredon_vm.yml
     apply:
       vars:
         curr_folder: "{{ vm_item.vm_folder }}"
         curr_vm: "{{ vm_item.vm_name }}"
         curr_uuid: "{{ vm_item.vm_uuid }}"
-  loop: "{{ vm_on_decomm_list|default([])|sort(attribute='vm_folder') }}"
+  loop: "{{ vm_on_decomm_list | default([]) | sort(attribute='vm_folder') }}"
   loop_control:
     loop_var: vm_item

@@ -1,6 +1,7 @@
 ---
 # tasks to remove DNS records for deleted VM
-- ansible.builtin.include_tasks:
+- name: Delete forward record
+  ansible.builtin.include_tasks:
     file: task_delete_forward_record.yml
     apply:
       vars:
@@ -8,7 +9,8 @@
         myserver: "{{ name_server }}"
         mydomain: "{{ domain_name }}"
         myrecord: "{{ vm_name }}"
-- ansible.builtin.include_tasks:
+- name: Delete reverse record
+  ansible.builtin.include_tasks:
     file: task_delete_reverse_record.yml
     apply:
       vars:
@@ -18,4 +20,4 @@
         myrecord: "{{ vm_name }}"
         myipaddress: "{{ vm_ip }}"
   when:
-    - vm_ip|default('') != ''
+    - vm_ip | default('') != ''

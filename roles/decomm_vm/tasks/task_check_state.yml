@@ -1,6 +1,6 @@
 ---
 # Tasks to check if a VM is poweredoff
-- name: get info for {{ curr_vm }} in {{ curr_folder }}
+- name: Get info for {{ curr_vm + ' in ' + curr_folder }}
   community.vmware.vmware_guest_info:
     hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
     username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
@@ -8,11 +8,12 @@
     datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
     folder: "{{ curr_folder }}"
     uuid: "{{ curr_uuid }}"
-    validate_certs: no
+    validate_certs: false
   register: reg_guest_info
-  no_log: yes
-  ignore_errors: yes
-- ansible.builtin.include_role:
+  no_log: true
+  ignore_errors: true
+- name: Get powered off
+  ansible.builtin.include_role:
     name: remove_snapshots
     tasks_from: task_get_poweredoff.yml
     apply:
