@@ -9,5 +9,5 @@
     folder: "{{ vm_folder }}"
     uuid: "{{ vm_uuid }}"
     state: absent
-    force: yes
-    validate_certs: no
+    force: true
+    validate_certs: false

@@ -1,7 +1,8 @@
 ---
 # Tasks to rename the VM
-- block:
-    - name: Rename {{ vm_name }} to _on-decomm-list>>{{ vm_name }}
+- name: Rename VM
+  block:
+    - name: Rename {{ vm_name + ' to _on-decomm-list>>' + vm_name }}
       community.vmware.vmware_object_rename:
         hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
         username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
@@ -9,11 +10,13 @@
         object_type: 'VM'
         object_moid: "{{ vm_moid }}"
         new_name: "_on-decomm-list>>{{ vm_name }}"
-        validate_certs: no
+        validate_certs: false
       register: reg_rename_vm
   rescue:
-    - ansible.builtin.debug:
+    - name: Debug message
+      ansible.builtin.debug:
         msg: "{{ reg_rename_vm }}"
   always:
-    - ansible.builtin.assert:
+    - name: Assert that renaming the VM succeeded
+      ansible.builtin.assert:
         that: reg_rename_vm is succeeded

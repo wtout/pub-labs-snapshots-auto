@@ -6,28 +6,38 @@ function kill_sub_processes() {
 	local children
 	pid="${1}"
 	and_self="${2:-false}"
-	if children=($(pgrep -P "${pid}"))
+	if pgrep -P "${pid}" &>/dev/null && mapfile -t children <<< $(pgrep -P "${pid}")
 	then
 		for child in "${children[@]}"
 		do
 			kill_sub_processes "${child}" true
 		done
 	fi
-	if [[ "${and_self}" == true ]]
+	if [[ ${and_self} == true ]]
 	then
-		[[ "$(ps -o pid | grep ${pid})" != "" ]] && kill -9 "${pid}"
+		# shellcheck disable=SC2009
+		[[ $(ps -o pid | grep "${pid}") != "" ]] && kill -9 "${pid}"
 	fi
 }
 
 function create_dir() {
-	if [[ ! -d "${1}" ]]
+	if [[ ! -d ${1} ]]
 	then
-		mkdir -m 775 -p "${1}"
+		mkdir -p "${1}"
+		mapfile -t PATH_LIST <<< "${1//\// }"
+		for dir in "${PATH_LIST[@]}"
+		do
+			chmod 775 "${dir}"
+		done
 		chown -R "$(stat -c '%U' "$(pwd)")":"$(stat -c '%G' "$(pwd)")" "${1}"
 	else
-		if [[ ! -w "${1}" ]]
+		if [[ ! -w ${1} ]]
 		then
-			chmod 775 "${1}"
+		mapfile -t PATH_LIST <<< "${1//\// }"
+		for dir in "${PATH_LIST[@]}"
+		do
+			chmod 775 "${dir}"
+		done
 			chown -R "$(stat -c '%U' "$(pwd)")":"$(stat -c '%G' "$(pwd)")" "${1}"
 		fi
 	fi
@@ -35,30 +45,30 @@ function create_dir() {
 
 function get_envname_list() {
 	local ENVLIST
-	[[ "$(echo "${@}" | grep -Ew '\-\-envname')" != "" ]] && ENVLIST="$(echo "${@}" | awk -F 'envname ' '{print $NF}' | cut -d'-' -f1 | xargs)"
+	[[ ${*} =~ '--envname' ]] && ENVLIST="$(echo "${*}" | awk -F 'envname ' '{print $NF}' | cut -d'-' -f1 | xargs)"
 	echo "${ENVLIST}"
 }
 
 function get_envname() {
-	local envname
-	[[ "$(echo "${@}" | grep -Ew '\-\-envname')" != "" ]] && envname="$(echo "${@}" | awk -F 'envname ' '{print $NF}' | cut -d'-' -f1 | xargs)"
-	echo "${envname}"
+	local ENVNAME
+	[[ ${*} =~ '--envname' ]] && ENVNAME="$(echo "${*}" | awk -F 'envname ' '{print $NF}' | cut -d'-' -f1 | xargs)"
+	echo "${ENVNAME}"
 }
 
 function check_arguments() {
-	if [[ "$(echo "${@}" | grep -Ew '\-\-envname')" == "" ]]
+	if [[ ${*} =~ '--envname' ]]
 	then
+		[[ $(wc -w <<< "$(get_envname_list "${*}")") -lt 1 ]] && printf "\nYou need to specify at least one environment. Aborting!\n\n" && exit 1
+	else
 		printf "\nEnvironment name is required!\nRe-run the script with %s--envname%s <environment name as defined under Inventories>\n\n" "${BOLD}" "${NORMAL}"
 		exit 1
-	else
-		[[ $(wc -w <<< "$(get_envname "${@}")") -ge 2 ]] && printf "\nYou can deploy only one environment at a time. Aborting!\n\n" && exit 1
-		[[ $(wc -w <<< "$(get_envname "${@}")") -lt 1 ]] && printf "\nYou need to specify at least one environment. Aborting!\n\n" && exit 1
 	fi
 }
 
 function check_deffile() {
 	if [[ ! -f ${SYS_DEF} ]]
 	then
+		# shellcheck disable=SC2153
 		echo -e "\n${BOLD}System definition file for ${ENAME} cannot be found. Aborting!${NORMAL}"
 		exit 1
 	fi
@@ -69,7 +79,7 @@ function get_os() {
 	MYRELEASE=$(grep ^NAME= /etc/os-release|cut -d '"' -f2|awk '{print $1}')
 	if [[ "${MYRELEASE}" != "" ]]	
 	then
-		echo ${MYRELEASE}
+		echo "${MYRELEASE}"
 		return 0
 	else
 		return 1
@@ -79,9 +89,9 @@ function get_os() {
 function add_user_uid_gid() {
 	local MYID
 	MYID=$(whoami)
-	if [[ "$(id ${MYID} | grep 'domain users')" != '' ]]
+	if [[ "$(id "${MYID}" | grep 'domain users')" != '' ]]
 	then
-		grep ${MYID} /etc/subuid &>/dev/null || echo -e "${MYID}:$(expr $(tail -1 /etc/subuid|cut -d ':' -f2) + $(tail -1 /etc/subuid|cut -d ':' -f3)):$(tail -1 /etc/subuid|cut -d ':' -f3)" | sudo tee -a /etc/subuid 1>/dev/null
+		grep "${MYID}" /etc/subuid &>/dev/null || echo -e "${MYID}:$(($(tail -1 /etc/subuid|cut -d ':' -f2) + $(tail -1 /etc/subuid|cut -d ':' -f3))):$(tail -1 /etc/subuid|cut -d ':' -f3)" | sudo tee -a /etc/subuid 1>/dev/null
 		yes|sudo cp -p /etc/subuid /etc/subgid
 	fi
 }
@@ -89,11 +99,11 @@ function add_user_uid_gid() {
 function add_user_docker_group() {
 	local MYID
 	MYID=$(whoami)
-	if [[ "$(get_os)" == "CentOS"* ]] && [[ "$(id ${MYID} | grep 'domain users')" != '' ]]
+	if [[ $(get_os) == "CentOS"* ]] && [[ "$(id "${MYID}" | grep 'domain users')" != '' ]]
 	then
 		if [[ "$(groups | grep docker)" == "" ]]
 		then
-			sudo usermod -aG docker ${MYID}
+			sudo usermod -aG docker "${MYID}"
 			echo -e "\n\n${BOLD}The ${MYID} user got added to the docker group. Please log out and log back in so that your group membership is re-evaluated${NORMAL}\n"
 			exit 1
 		fi
@@ -104,7 +114,8 @@ function check_docker_login() {
 	local MYRELEASE
 	local MYDOMAIN
 	local MYJSONFILE
-	local AUTHFILE
+	local AUTHFILE1
+	local AUTHFILE2
 	local LOGGEDIN
 	LOGGEDIN=true
 	AUTHFILE1=${HOME}/.docker/config.json
@@ -121,16 +132,16 @@ function check_docker_login() {
 		*)
 			;;
 	esac
-	if [[ ${MYJSONFILE} == ${AUTHFILE1} ]]
+	if [[ ${MYJSONFILE} == "${AUTHFILE1}" ]]
 	then
-		if [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
+		if [[ ! -f ${MYJSONFILE} || "$(grep "${MYDOMAIN}" "${MYJSONFILE}")" == "" ]]
 		then
 			LOGGEDIN=false
 		fi
 	else
 		if [[ -z ${REGISTRY_AUTH_FILE+x} ]]
 		then
-			if [[ ! -f ${AUTHFILE1} || "$(grep ${MYDOMAIN} ${AUTHFILE1})" == "" ]] && [[ ! -f ${AUTHFILE2} || "$(grep ${MYDOMAIN} ${AUTHFILE2})" == "" ]] && [[ ! -f ${MYJSONFILE} || "$(grep ${MYDOMAIN} ${MYJSONFILE})" == "" ]]
+			if [[ ! -f ${AUTHFILE1} || "$(grep "${MYDOMAIN}" "${AUTHFILE1}")" == "" ]] && [[ ! -f ${AUTHFILE2} || "$(grep "${MYDOMAIN}" "${AUTHFILE2}")" == "" ]] && [[ ! -f ${MYJSONFILE} || "$(grep "${MYDOMAIN}" "${MYJSONFILE}")" == "" ]]
 			then
 				LOGGEDIN=false
 			fi
@@ -140,7 +151,7 @@ function check_docker_login() {
 				unset REGISTRY_AUTH_FILE
 				LOGGEDIN=false
 			else
-				[[ $(podman login --get-login ${MYDOMAIN} --authfile ${MYJSONFILE} &>/dev/null; echo "${?}") -ne 0 ]] && [[ $(podman login --get-login ${MYDOMAIN} --authfile ${AUTHFILE2} &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
+				[[ $(podman login --get-login "${MYDOMAIN}" --authfile "${MYJSONFILE}" &>/dev/null; echo "${?}") -ne 0 ]] && [[ $(podman login --get-login "${MYDOMAIN}" --authfile "${AUTHFILE2}" &>/dev/null; echo "${?}") -ne 0 ]] && LOGGEDIN=false
 			fi
 		fi
 	fi
@@ -181,7 +192,7 @@ function restart_docker() {
 	then
 		if [[ "$($(docker_cmd) system info 2>/dev/null | grep -i containers | awk '{print $NF}')" == "0" ]]
 		then
-			sudo systemctl restart docker@$(whoami).service
+			sudo systemctl restart docker@"$(whoami)".service
 		fi
 	fi
 }
@@ -190,8 +201,8 @@ function image_prune() {
 	local CIID
 	local IIDLIST
 	CIID=$($(docker_cmd) images | grep -E "${CONTAINERREPO}.*${ANSIBLE_VERSION}" | awk '{print $3}')
-	[[ "${CIID}" == "" ]] && IIDLIST=$($(docker_cmd) images -a -q) || IIDLIST=$($(docker_cmd) images -a -q | grep -v ${CIID})
-	[[ "${IIDLIST}" != "" ]] && $(docker_cmd) rmi ${IIDLIST} -f
+	[[ "${CIID}" == "" ]] && IIDLIST=$($(docker_cmd) images -a -q) || IIDLIST=$($(docker_cmd) images -a -q | grep -v "${CIID}")
+	[[ "${IIDLIST}" != "" ]] && $(docker_cmd) rmi "${IIDLIST}" -f
 }
 
 function check_image() {
@@ -211,9 +222,9 @@ function pull_image() {
 			AlmaLinux*|Ubuntu*)
 				if [[ -f ${HOME}/.podman/auth.json ]]
 				then
-					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${HOME}/.podman/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
+					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile "${HOME}"/.podman/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				else
-					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile ${XDG_RUNTIME_DIR}/containers/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
+					$(docker_cmd) pull "${CONTAINERREPO}:${ANSIBLE_VERSION}" --authfile "${XDG_RUNTIME_DIR}"/containers/auth.json &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-pull_error.stderr
 				fi
 				;;
 			*)
@@ -236,14 +247,14 @@ function start_container() {
 	CNTNRNAME="${1}"
 	if [[ $(check_container "${CNTNRNAME}"; echo "${?}") -ne 0 ]]
 	then
-		[[ ! -d ${HOME}/.ssh ]] && mkdir ${HOME}/.ssh
+		[[ ! -d ${HOME}/.ssh ]] && mkdir "${HOME}"/.ssh
 		[[ $- =~ x ]] && debug=1 && echo "Starting container ${CNTNRNAME}"
 		[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
-		if [[ "${ANSIBLE_LOG_PATH}" == "" ]]
+		if [[ ${ANSIBLE_LOG_PATH} == "" ]]
 		then
-			$(docker_cmd) run --rm -e MYPROXY=${PROXY_ADDRESS} -e MYHOME=${PWD} -e MYHOSTNAME=$(hostname) -e MYCONTAINERNAME=${CNTNRNAME} -e MYIP=$(get_host_ip) --user ansible -w ${CONTAINERWD} -v /data:/data:z -v /tmp:/tmp:z -v ${PWD}:${CONTAINERWD}:z --name ${CNTNRNAME} -t -d --entrypoint /bin/bash ${CONTAINERREPO}:${ANSIBLE_VERSION} 1>/dev/null
+			$(docker_cmd) run --rm -e MYPROXY="${PROXY_ADDRESS}" -e MYHOME="${PWD}" -e MYHOSTNAME="$(hostname)" -e MYCONTAINERNAME="${CNTNRNAME}" -e MYIP="$(get_host_ip)" --user ansible -w "${CONTAINERWD}" -v /data:/data:z -v /tmp:/tmp:z -v "${PWD}":"${CONTAINERWD}":z --name "${CNTNRNAME}" -t -d --entrypoint /bin/bash "${CONTAINERREPO}":"${ANSIBLE_VERSION}" 1>/dev/null
 		else
-			$(docker_cmd) run --rm -e ANSIBLE_LOG_PATH=${ANSIBLE_LOG_PATH} -e ANSIBLE_FORKS=${NUM_HOSTSINPLAY} -e MYPROXY=${PROXY_ADDRESS} -e MYHOME=${PWD} -e MYHOSTNAME=$(hostname) -e MYCONTAINERNAME=${CNTNRNAME} -e MYIP=$(get_host_ip) -e MYHOSTOS=$(get_os) --user ansible -w ${CONTAINERWD} -v /data:/data:z -v /tmp:/tmp:z -v ${HOME}/.ssh:/home/ansible/.ssh:z -v ${PWD}:${CONTAINERWD}:z --name ${CNTNRNAME} -t -d --entrypoint /bin/bash ${CONTAINERREPO}:${ANSIBLE_VERSION} 1>/dev/null
+			$(docker_cmd) run --rm -e ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH}" -e ANSIBLE_FORKS="${NUM_HOSTSINPLAY}" -e MYPROXY="${PROXY_ADDRESS}" -e MYHOME="${PWD}" -e MYHOSTNAME="$(hostname)" -e MYCONTAINERNAME="${CNTNRNAME}" -e MYIP="$(get_host_ip)" -e MYHOSTOS="$(get_os)" --user ansible -w "${CONTAINERWD}" -v /data:/data:z -v /tmp:/tmp:z -v "${HOME}"/.ssh:/home/ansible/.ssh:z -v "${PWD}":"${CONTAINERWD}":z --name "${CNTNRNAME}" -t -d --entrypoint /bin/bash "${CONTAINERREPO}":"${ANSIBLE_VERSION}" 1>/dev/null
 		fi
 		[[ ${debug} == 1 ]] && set -x
 		[[ $(check_container "${CNTNRNAME}"; echo "${?}") -ne 0 ]] && echo "Unable to start container ${CNTNRNAME}" && exit 1
@@ -260,14 +271,15 @@ function kill_container() {
 		[[ $- =~ x ]] && debug=1 && echo "Killing container ${CNTNRNAME}"
 		if [[ "${dc}" == "podman" ]]
 		then
-			${dc} container rm ${CNTNRNAME} &>/dev/null
+			${dc} container rm "${CNTNRNAME}" -f &>/dev/null
 		else
-			${dc} kill ${CNTNRNAME} &>/dev/null
+			${dc} kill "${CNTNRNAME}" &>/dev/null
 		fi
 	fi
 }
 
 function check_repeat_job() {
+	# shellcheck disable=SC2009
 	ps -ef | grep -w "${ENAME}" | grep "Bash/play_" | grep -vwE "${PID}|${INVOKERPID}|grep" | grep -vw 'cd'
 	return ${?}
 }
@@ -277,9 +289,10 @@ function check_hosts_limit() {
 	local ARG_NAME
 	local MYACTION
 	local NEWARGS
-	MYARGS=$(echo "${@}" | sed 's/,\(dr\)*vcenter//')
-	[[ "$(echo "${MYARGS}" | grep -Ew '\-\-limit')" != "" ]] && [[ "$(echo "${MYARGS}" | grep 'vcenter')" == "" ]] && ARG_NAME="--limit" && MYACTION="add"
-	[[ "$(echo "${MYARGS}" | grep -Ew '\-l')" != "" ]] && [[ "$(echo "${MYARGS}" | grep 'vcenter')" == "" ]] && ARG_NAME="-l" && MYACTION="add"
+	# shellcheck disable=SC2001
+	MYARGS=$(echo "${*}" | sed 's/,\(dr\)*vcenter//g')
+	[[ ${MYARGS} =~ ' --limit ' ]] &&  ARG_NAME="--limit" && MYACTION="add"
+	[[ ${MYARGS} =~ ' -l ' ]] && ARG_NAME="-l" && MYACTION="add"
 	if [[ ${MYACTION} == "add" ]]
 	then
 		local MYHOSTS
@@ -287,22 +300,24 @@ function check_hosts_limit() {
 		local UPDATE_ARGS
 		local VCENTERS
 		MYHOSTS=$(echo "${MYARGS}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}')
-		[[ "$(echo "${MYARGS}" | grep -Ew '\-\-tags')" != "" ]] && MYTAGS=$(echo "${MYARGS}" | awk -F '--tags ' '{print $NF}' | awk -F ' -' '{print $1}')
-		[[ "${MYTAGS}" == "" ]] && UPDATE_ARGS=1
-		[[ "$(echo "${MYTAGS}" | grep -Ew 'vm_creation|capcheck')" != "" ]] && UPDATE_ARGS=1
-		if [[ "$(echo "${MYHOSTS}" | grep 'dr')" == "" ]]
-		then
-			VCENTERS='vcenter'
-		else
-			if [[ "$(echo "${MYHOSTS}" | sed "s/,/\n/g" | grep -v 'dr')" == "" ]]
-			then
-				VCENTERS='drvcenter'
-			else
-				VCENTERS='vcenter,drvcenter'
-			fi
-		fi
+		[[ ${MYARGS} =~ ' --tags ' ]] && MYTAGS=$(echo "${MYARGS}" | awk -F '--tags ' '{print $NF}' | awk -F ' -' '{print $1}')
+		[[ ${MYARGS} =~ ' -t ' ]] && MYTAGS=$(echo "${MYARGS}" | awk -F '-t ' '{print $NF}' | awk -F ' -' '{print $1}')
+		[[ ${MYTAGS} == "" ]] && UPDATE_ARGS=1
+		[[ ${MYTAGS} =~ vm_creation|capcheck ]] && UPDATE_ARGS=1
 		if [[ ${UPDATE_ARGS} -eq 1 ]]
 		then
+			if [[ ! ${MYHOSTS} =~ dr ]]
+			then
+				VCENTERS='vcenter'
+			else
+				if [[ "$(echo "${MYHOSTS}" | sed "s/,/\n/g" | grep -v 'dr')" == "" ]]
+				then
+					VCENTERS='drvcenter'
+				else
+					VCENTERS='vcenter,drvcenter'
+				fi
+			fi
+			# shellcheck disable=SC2001
 			NEWARGS=$(echo "${MYARGS}" | sed "s/${MYHOSTS}/${MYHOSTS},${VCENTERS}/")
 		else
 			NEWARGS="${MYARGS}"
@@ -323,10 +338,8 @@ function clean_arguments() {
 	NEWARGS="${3}"
 	if [[ "$(echo "${NEWARGS}" | sed -n "/${OPTION_NAME}/p")" != "" ]]
 	then
-		shift
+		# shellcheck disable=SC2001
 		NEWARGS=$(echo "${NEWARGS}" | sed "s/${OPTION_NAME} ${OPTION_ARG}//")
-	else
-		NEWARGS="${NEWARGS}"
 	fi
 	echo "${NEWARGS}"
 }
@@ -350,7 +363,7 @@ function git_config() {
 			then
 				git config --file .git/config user.name "${NAME} ${SURNAME}" || EC=1
 			else
-				[[ "${SURNAME}" != "" ]] && [[ "$(git config --file .git/config remote.origin.url | sed -e 's/.*\/\/\(.*\)@.*/\1/')" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]] && git config --file .git/config user.name "${NAME} ${SURNAME}" || EC=1
+				[[ "${SURNAME}" != "" ]] && [[ "$(git config --file .git/config remote.origin.url | sed -e 's/.*\/\/\(.*\)@.*/\1/')" == *"$(echo "${SURNAME:0:5}" | tr '[:upper:]' '[:lower:]')"* ]] && git config --file .git/config user.name "${NAME} ${SURNAME}" || EC=1
 			fi
 		fi
 		[[ ${EC} -eq 1 ]] && echo "Invalid full name. Aborting!" && exit ${EC}
@@ -359,9 +372,9 @@ function git_config() {
 			NAME=$(git config --file .git/config user.name | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
 			SURNAME=$(git config --file .git/config user.name | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
 			read -rp "Enter your email address [ENTER]: " GIT_EMAIL_ADDRESS
-			if [[ -z "$(echo "${GIT_EMAIL_ADDRESS}"|grep -E '<|>')" ]]
+			if ! echo "${GIT_EMAIL_ADDRESS}" | grep -qE '<>'
 			then
-				if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]] && [[ -n "${GIT_EMAIL_ADDRESS}" ]] && ([[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:2} | tr '[:upper:]' '[:lower:]')"* ]] || [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${NAME:0:1} | tr '[:upper:]' '[:lower:]')"* ]]) && [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo ${SURNAME:0:5} | tr '[:upper:]' '[:lower:]')"* ]]
+				if [[ "$(git config --file .git/config remote.origin.url | grep "\/\/.*@")" == "" ]] && [[ -n "${GIT_EMAIL_ADDRESS}" ]] && { [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo "${NAME:0:2}" | tr '[:upper:]' '[:lower:]')"* ]] || [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo "${NAME:0:1}" | tr '[:upper:]' '[:lower:]')"* ]]; } && [[ "$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)" == *"$(echo "${SURNAME:0:5}" | tr '[:upper:]' '[:lower:]')"* ]]
 				then
 					git config --file .git/config user.email "${GIT_EMAIL_ADDRESS}" && git config --file .git/config remote.origin.url "$(git config --file .git/config remote.origin.url | sed -e "s|//\(\w\)|//$(echo "${GIT_EMAIL_ADDRESS}" | cut -d '@' -f1)@\1|")" || EC=1
 				else
@@ -387,8 +400,7 @@ function get_proxy() {
 	PUBLIC_ADDRESS="https://time.google.com"
 	if [[ "${MYPROXY}" == "" ]]
 	then
-		curl ${PUBLIC_ADDRESS} &>/dev/null
-		if [[ ${?} -eq 0 ]]
+		if curl "${PUBLIC_ADDRESS}" &>/dev/null
 		then
 			echo "${MYPROXY}"
 			return 0
@@ -397,18 +409,17 @@ function get_proxy() {
 			return 1
 		fi
 	else
-		curl --proxy "${MYPROXY}" "${PUBLIC_ADDRESS}" &>/dev/null
-		if [[ ${?} -eq 0 ]]
+		if curl --proxy "${MYPROXY}" "${PUBLIC_ADDRESS}" &>/dev/null
 		then
 			echo "${MYPROXY}"
 			return 0
 		else
 			[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
+			# shellcheck disable=SC2153
 			select_creds primary vcenter_service user "${PCREDS_LIST[@]}" 1>/dev/null && read -r PPUSER <<< "$(select_creds primary vcenter_service user "${PCREDS_LIST[@]}")"
 			select_creds primary vcenter_service pass "${PCREDS_LIST[@]}" 1>/dev/null && read -r PPPASS <<< "$(select_creds primary vcenter_service pass "${PCREDS_LIST[@]}")"
 			MYPROXY=$(echo "${MYPROXY}" | sed -e "s|//.*@|//|g" -e "s|//|//${PPUSER}:${PPPASS}@|g")
-			curl --proxy "${MYPROXY}" "${PUBLIC_ADDRESS}" &>/dev/null
-			if [[ ${?} -eq 0 ]]
+			if curl --proxy "${MYPROXY}" "${PUBLIC_ADDRESS}" &>/dev/null
 			then
 				echo "${MYPROXY}"
 				return 0
@@ -416,8 +427,7 @@ function get_proxy() {
 				if [[ -n "${SPUSER+x}" ]] && [[ -n "${SPPASS+x}" ]]
 				then
 					MYPROXY=$(echo "${MYPROXY}" | sed -e "s|//.*@|//|g" -e "s|//|//${SPUSER}:${SPPASS}@|g")
-					curl --proxy "${MYPROXY}" "${PUBLIC_ADDRESS}" &>/dev/null
-					if [[ ${?} -eq 0 ]]
+					if curl --proxy "${MYPROXY}" "${PUBLIC_ADDRESS}" &>/dev/null
 					then
 						echo "${MYPROXY}"
 						return 0
@@ -433,16 +443,16 @@ function get_proxy() {
 }
 
 function add_write_permission() {
-	for i in ${*}
+	for i in "${@}"
 	do
-		sudo chmod o+w ${i}
+		sudo chmod o+w "${i}"
 	done
 }
 
 function remove_write_permission() {
-	for i in ${*}
+	for i in "${@}"
 	do
-		sudo chmod o-w ${i}
+		sudo chmod o-w "${i}"
 	done
 }
 
@@ -451,7 +461,8 @@ function get_creds_prefix() {
     local DATACENTER
     local CREDS_PREFIX
 	[[ -f "${SYS_DEF}" ]] && FILETOCHECK="${SYS_DEF}" || FILETOCHECK="${SYS_ALL}"
-	DATACENTER=$(cat "${FILETOCHECK}" | sed "/^\s*$/d" | grep -A22 -P "^datacenter:$" | sed -n "/${1}:/,+2p" | sed -n "/name:/,1p" | awk -F ': ' '{print $NF}' | sed "s/'//g")
+	DATACENTER=$(sed "/^\s*$/d" < "${FILETOCHECK}" | grep -A22 -P "^datacenter:$" | sed -n "/${1}:/,+2p" | sed -n "/name:/,1p" | awk -F ': ' '{print $NF}' | sed "s/'//g")
+	# shellcheck disable=SC2181
 	if [[ "${?}" == "0" ]] && [[ "${DATACENTER}" != "" ]] && [[ "${DATACENTER}" != "''" ]]
 	then
 		case ${DATACENTER} in
@@ -468,7 +479,7 @@ function get_creds_prefix() {
 				CREDS_PREFIX='PAETEST_'
 				;;
 		esac
-		echo ${CREDS_PREFIX}
+		echo "${CREDS_PREFIX}"
 		return 0
 	else
 		return 1
@@ -478,9 +489,9 @@ function get_creds_prefix() {
 function get_creds() {
 	local CNTNRNAME
 	CNTNRNAME=${1}
-	if [[ $(get_creds_prefix ${2}) ]]
+	if [[ $(get_creds_prefix "${2}") ]]
 	then
-		view_vault "${CNTNRNAME}" "${PASSVAULT}" Bash/get_common_vault_pass.sh | grep ^$(get_creds_prefix ${2}) | sed "s/'//g"
+		view_vault "${CNTNRNAME}" "${PASSVAULT}" Bash/get_common_vault_pass.sh | grep ^"$(get_creds_prefix "${2}")" | sed "s/'//g"
 		return 0
 	else
 		return 1
@@ -496,10 +507,10 @@ function select_creds() {
 	ACCT=${2}
 	CRED=${3}
 	shift; shift; shift
-	CREDS_LIST=("${@}")
-	if [[ "$(echo ${CREDS_LIST})" != '' ]]
+	CREDS_LIST=("${*}")
+	if [[ "${#CREDS_LIST[@]}" != 0 ]]
 	then
-		echo "${CREDS_LIST[@]}" | grep ^$(get_creds_prefix ${SITE})${ACCT^^}_${CRED^^} | cut -d " " -f2
+		echo "${CREDS_LIST[@]}" | grep ^"$(get_creds_prefix "${SITE}")""${ACCT^^}"_"${CRED^^}" | cut -d " " -f2
 		return 0
 	else
 		return 1
@@ -511,15 +522,16 @@ function remove_hosts_arg() {
 	local ARG_NAME
 	local MYACTION
 	local NEWARGS
-	[[ "$(echo "${@}" | grep -Ew '\-\-limit')" != "" ]] && ARG_NAME="--limit" && MYACTION="clean"
-	[[ "$(echo "${@}" | grep -Ew '\-l')" != "" ]] && ARG_NAME="-l" && MYACTION="clean"
+	[[ "${*}" =~ ' --limit ' ]] && ARG_NAME="--limit" && MYACTION="clean"
+	[[ "${*}" =~ ' -l ' ]] && ARG_NAME="-l" && MYACTION="clean"
 	if [[ ${MYACTION} == "clean" ]]
 	then
 		local MYARGS
-		MYARGS=$(echo "${@}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}')
-		NEWARGS=$(echo "${@}" | sed "s/${ARG_NAME} ${MYARGS}//")
+		MYARGS=$(echo "${*}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}')
+		# shellcheck disable=SC2001
+		NEWARGS=$(echo "${*}" | sed "s/${ARG_NAME} ${MYARGS}//")
 	else
-		NEWARGS="${@}"
+		NEWARGS="${*}"
 	fi
 	echo "${NEWARGS}"
 }
@@ -529,15 +541,16 @@ function remove_extra_vars_arg() {
 	local MYACTION
 	local NEWARGS
 	# Remove --extra-vars or -e argument from script arguments
-	[[ "$(echo "${@}" | grep -Ew '\-\-extra\-vars')" != "" ]] && ARG_NAME="--extra-vars" && MYACTION="clean"
-	[[ "$(echo "${@}" | grep -Ew '\-e')" != "" ]] && ARG_NAME="-e" && MYACTION="clean"
+	[[ "${*}" =~ ' --extra-vars ' ]] && ARG_NAME="--extra-vars" && MYACTION="clean"
+	[[ "${*}" =~ ' -e ' ]] && ARG_NAME="-e" && MYACTION="clean"
 	if [[ ${MYACTION} == "clean" ]]
 	then
 		local MYARGS
-		MYARGS=$(echo "${@}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}')
-		NEWARGS=$(echo "${@}" | sed "s|${ARG_NAME} ${MYARGS}||")
+		MYARGS=$(echo "${*}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}')
+		# shellcheck disable=SC2001
+		NEWARGS=$(echo "${*}" | sed "s|${ARG_NAME} ${MYARGS}||")
 	else
-		NEWARGS="${@}"
+		NEWARGS="${*}"
 	fi
 	echo "${NEWARGS}"
 }
@@ -549,7 +562,7 @@ function get_host_ip() {
 function encrypt_vault() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault encrypt "${2}" --vault-password-file "${3}" &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr
+	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i "${CNTNRNAME}" ansible-vault encrypt "${2}" --vault-password-file "${3}" &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr
 	if [[ -s "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr && "$(grep 'ERROR' "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr)" != "" ]]
 	then
 		cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-encrypt_error.stderr
@@ -562,9 +575,9 @@ function encrypt_vault() {
 function view_vault() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
-	[[ $(grep "was not found" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>/dev/null
-	[[ $(grep "Permission denied" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sudo chmod 644 "${2}" && $(docker_cmd) exec -i ${CNTNRNAME} ansible-vault view "${2}" --vault-password-file "${3}" 2>/dev/null
+	[[ -f ${2} ]] && [[ -f ${3} ]] && [[ -x ${3} ]] && $(docker_cmd) exec -i "${CNTNRNAME}" ansible-vault view "${2}" --vault-password-file "${3}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
+	[[ $(grep "was not found" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}" && $(docker_cmd) exec -i "${CNTNRNAME}" ansible-vault view "${2}" --vault-password-file "${3}" 2>/dev/null
+	[[ $(grep "Permission denied" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && sudo chmod 644 "${2}" && $(docker_cmd) exec -i "${CNTNRNAME}" ansible-vault view "${2}" --vault-password-file "${3}" 2>/dev/null
 	[[ $(grep "Error" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr) != "" ]] && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr && exit 1
 	rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-decrypt_error.stderr
 }
@@ -603,7 +616,7 @@ function read_repo_cred() {
 	local CNTNRNAME
 	local REPOCRED
 	CNTNRNAME="${1}"
-	REPOCRED="$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep $(echo ${4//REPO/}) | cut -d "'" -f2)"
+	REPOCRED="$(view_vault "${CNTNRNAME}" "${2}" "${3}" | grep "${4//REPO/}" | cut -d "'" -f2)"
 	echo "${REPOCRED}"
 }
 
@@ -617,10 +630,12 @@ function get_secrets_vault() {
 		local localbranch
 		local remotebranchlist
 		CNTNRNAME="${1}"
-		localbranch=$(git branch|grep '^*'|awk '{print $NF}')
+		localbranch=$(git branch | grep '^\*'|awk '{print $NF}')
 		[[ -z ${localbranch} ]] && echo "Unable to determine the current branch. Exiting!" && exit 1
+		[[ ${localbranch,,} =~ release|feature ]] && localbranch='develop'
+		[[ ${localbranch,,} =~ hotfix ]] && localbranch='master'
 		remotebranchlist=$(git branch -r)
-		if [[ $(echo ${remotebranchlist}|grep '/'${localbranch}) ]]
+		if echo "${remotebranchlist}" | grep -q '/'"${localbranch}"
 		then
 			[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 			REPOUSER=$(read_repo_cred "${CNTNRNAME}" "${2}" "${3}" "REPOUSER")
@@ -629,8 +644,7 @@ function get_secrets_vault() {
 			[[ "$(git config --file .git/config --get remote.origin.url | grep '\/\/.*@')" == "" ]] && REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}:${REPOPWD}@\1|") || REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//.*@|//${REPOUSER}:${REPOPWD}@|")
 			for i in {1..3}
 			do
-				git clone --branch ${localbranch} --single-branch "$(echo "${REMOTEURL}" | sed -e "s|pub-||" -e "s|auto|auto-secrets|")" .tmp &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr
-				[[ ${?} -eq 0 ]] && break || CLONE_FAILED="true"
+				git clone --branch "${localbranch}" --single-branch "$(echo "${REMOTEURL}" | sed -e "s|pub-||" -e "s|auto|auto-secrets|")" .tmp &>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr && break || CLONE_FAILED="true"
 			done
 			if [[ "${CLONE_FAILED}" ]]
 			then
@@ -638,12 +652,12 @@ function get_secrets_vault() {
 				echo -e "${BOLD}Unable to download the secrets vault${NORMAL}" && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr && EC=1
 			fi
 			rm -f "${ANSIBLE_LOG_LOCATION}"/"${PID}"-get-secrets-vault.stderr
-			[[ ${EC} == 1 ]] && exit ${EC}
+			[[ ${EC} == 1 ]] && exit "${EC}"
 			[[ ${debug} == 1 ]] && set -x
-			mv .tmp/$(echo "${PASSVAULT##*/}") vars/
+			mv .tmp/"${PASSVAULT##*/}" vars/
 			rm -rf .tmp
 		else
-			echo "Unable to clone branch "${localbranch}" of the secrets vault. Exiting!"
+			echo "Unable to clone branch ${localbranch} of the secrets vault. Exiting!"
 			exit 1
 		fi
 	fi
@@ -664,13 +678,12 @@ function check_updates() {
 		local EC
 		local localbranch
 		local remotebranchlist
-		localbranch=$(git branch|grep '^*'|awk '{print $NF}')
+		localbranch=$(git branch|grep '^\*' | awk '{print $NF}')
 		remotebranchlist=$(git branch -r)
-		if [[ $(echo ${remotebranchlist}|grep '/'${localbranch}) ]]
+		if echo "${remotebranchlist}" | grep -q '/'"${localbranch}"
 		then
 			local LOCALID
-			LOCALID=$(git rev-parse --short HEAD)
-			if [[ ${?} -eq 0 ]]
+			if LOCALID=$(git rev-parse --short HEAD)
 			then
 				local REPOUSER
 				local REPOPASS
@@ -704,7 +717,7 @@ function check_updates() {
 					[[ "$(git config --file .git/config --get remote.origin.url | grep '\/\/.*@')" == "" ]] && REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//\(\w\)|//${REPOUSER}:${REPOPWD}@\1|") || REMOTEURL=$(git config --file .git/config --get remote.origin.url | sed -e "s|//.*@|//${REPOUSER}:${REPOPWD}@|")
 					REMOTEID=$([[ ${SET_PROXY} ]] && export https_proxy=${PROXY_ADDRESS}; timeout 15 git ls-remote "${REMOTEURL}" refs/heads/"${localbranch}" 2>"${ANSIBLE_LOG_LOCATION}"/"${PID}"-remoteid.stderr | cut -c1-7)
 					[[ ${debug} == 1 ]] && set -x
-					[[ ${REMOTEID} == "" ]] && sleep 3 || break
+					{ [[ ${REMOTEID} == "" ]] && sleep 3; } || break
 				done
 				if [[ "${REMOTEID}" == "" ]]
 				then
@@ -732,9 +745,12 @@ function check_updates() {
 					then
 						git reset -q --hard origin/"${localbranch}"
 						[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
-						git pull "$(git config --file .git/config --get remote.origin.url | sed -e "s|\(//.*\)@|\1:${REPOPASS}@|")" "${localbranch}" &>"${PWD}"/.pullerr && sed -i "s|${REPOPASS}|xxxxx|" "${PWD}"/.pullerr
-						[[ ${?} == 0 ]] && echo -e "\nThe installation package has been updated. ${BOLD}Please re-run the script for the updates to take effect${NORMAL}\n\n" && EC='return 3'
-						[[ ${?} != 0 ]] && echo -e "\nThe installation package update has failed with the following error:\n\n${BOLD}$(cat "${PWD}"/.pullerr)${NORMAL}\n\n" && EC='exit'
+						if git pull "$(git config --file .git/config --get remote.origin.url | sed -e "s|\(//.*\)@|\1:${REPOPASS}@|")" "${localbranch}" &>"${PWD}"/.pullerr && sed -i "s|${REPOPASS}|xxxxx|" "${PWD}"/.pullerr
+						then
+							echo -e "\nThe installation package has been updated. ${BOLD}Please re-run the script for the updates to take effect${NORMAL}\n\n" && EC='return 3'
+						else
+							echo -e "\nThe installation package update has failed with the following error:\n\n${BOLD}$(cat "${PWD}"/.pullerr)${NORMAL}\n\n" && EC='exit'
+						fi
 						[[ ${debug} == 1 ]] && set -x
 						rm -f "${PWD}"/.pullerr
 					else
@@ -750,9 +766,11 @@ function check_updates() {
 function get_inventory() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	ANSIBLE_CMD_ARGS=$(echo "${@}" | sed "s/${CNTNRNAME} //")
+	# shellcheck disable=SC2001
+	ANSIBLE_CMD_ARGS=$(echo "${*}" | sed "s/${CNTNRNAME} //")
 	sed -i "/^vault_password_file.*$/,+d" "${ANSIBLE_CFG}"
-	$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/getinventory.yml --extra-vars "{SYS_NAME: '${SYS_DEF}'}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" $(remove_extra_vars_arg "$(remove_hosts_arg "${ANSIBLE_CMD_ARGS}")") -v
+	# shellcheck disable=SC2046
+	$(docker_cmd) exec -t "${CNTNRNAME}" ansible-playbook playbooks/getinventory.yml --extra-vars "{SYS_NAME: '${SYS_DEF}'}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" $(remove_extra_vars_arg "$(remove_hosts_arg "${ANSIBLE_CMD_ARGS}")") -v
 	GET_INVENTORY_STATUS=${?}
 	[[ ${GET_INVENTORY_STATUS} != 0 ]] && exit 1
 }
@@ -763,13 +781,13 @@ function get_hosts() {
 	local HOSTS_LIST
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	[[ "$(echo "${@}" | grep -Ew '\-\-limit')" != "" ]] && ARG_NAME="--limit" && MYACTION="get"
-	[[ "$(echo "${@}" | grep -Ew '\-l')" != "" ]] && ARG_NAME="-l" && MYACTION="get"
+	[[ "${*}" =~ ' --limit ' ]] && ARG_NAME="--limit" && MYACTION="get"
+	[[ "${*}" =~ ' -l ' ]] && ARG_NAME="-l" && MYACTION="get"
 	if [[ ${MYACTION} == "get" ]]
 	then
-		HOSTS_LIST=$(echo "${@}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}' | sed -e 's/,/ /g')
+		HOSTS_LIST=$(echo "${*}" | awk -F "${ARG_NAME} " '{print $NF}' | awk -F ' -' '{print $1}' | sed -e 's/,/ /g')
 	else
-		HOSTS_LIST=$($(docker_cmd) exec -i ${CNTNRNAME} ansible all -i "${INVENTORY_PATH}" --list-hosts | grep -v host | sed -e 's/^\s*\(\w.*\)$/\1/g' | sort)
+		HOSTS_LIST=$($(docker_cmd) exec -i "${CNTNRNAME}" ansible all -i "${INVENTORY_PATH}" --list-hosts | grep -v host | sed -e 's/^\s*\(\w.*\)$/\1/g' | sort)
 	fi
 	[ "$(echo "${HOSTS_LIST}" | wc -w)" -gt 1 ] && HL="${HOSTS_LIST// /,}" || HL="${HOSTS_LIST}"
 }
@@ -778,12 +796,12 @@ function get_hostsinplay() {
 	local hip
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	hip=$($(docker_cmd) exec -i ${CNTNRNAME} ansible "${2}" -i "${INVENTORY_PATH}" -m debug -a msg="{{ ansible_play_hosts }}" | grep -Ev "\[|\]|\{|\}" | sort -u)
-	echo ${hip}
+	hip=$($(docker_cmd) exec -i "${CNTNRNAME}" ansible "${2}" -i "${INVENTORY_PATH}" -m debug -a msg="{{ ansible_play_hosts }}" | grep -Ev "\[|\]|\{|\}" | sort -u)
+	echo "${hip}"
 }
 
 function check_mode() {
-	[[ "$(echo "${@}" | grep -Ew '\-\-check')" != "" ]] && echo " in check mode " || echo " "
+	{ [[ "${*}" =~ ' --check' ]] && echo " in check mode "; } || echo " "
 }
 
 function create_symlink() {
@@ -810,15 +828,17 @@ function enable_logging() {
 		LOG_FILE="${ANSIBLE_LOG_LOCATION}/play_$(basename "${0}" | awk -F '.' '{print $1}').${ENAME}.log"
 		[[ "$( grep ^log_path "${ANSIBLE_CFG}" )" != "" ]] && sed -i '/^log_path = .*\$/d' "${ANSIBLE_CFG}"
 		export ANSIBLE_LOG_PATH=${LOG_FILE}
-		touch "${LOG_FILE}"
-		[[ ${?} -ne 0 ]] && echo -e "\nUnable to create ${LOG_FILE}. Aborting run!\n" && exit 1
+		if ! touch "${LOG_FILE}"
+		then
+			echo -e "\nUnable to create ${LOG_FILE}. Aborting run!\n" && exit 1
+		fi
 		chown "$(stat -c '%U' "$(pwd)")":"$(stat -c '%G' "$(pwd)")" "${LOG_FILE}"
 		chmod o+rw "${LOG_FILE}"
 		if [[ -z ${MYINVOKER+x} ]]
 		then
-			echo -e "############################################################\nAnsible Control Machine $(hostname) $(get_host_ip) ${CNTNRNAME}\nThis script was run$(check_mode "${@}")by $(whoami) on $(date)\n############################################################\n\n" > "${LOG_FILE}"
+			echo -e "############################################################\nAnsible Control Machine $(hostname) $(get_host_ip) ${CNTNRNAME}\nThis script was run$(check_mode "${*}")by $(whoami) on $(date)\n############################################################\n\n" > "${LOG_FILE}"
 		else
-			echo -e "############################################################\nAnsible Control Machine $(hostname) $(get_host_ip) ${CNTNRNAME}\nThis script was run$(check_mode "${@}")by ${MYINVOKER} on $(date)\n############################################################\n\n" > "${LOG_FILE}"
+			echo -e "############################################################\nAnsible Control Machine $(hostname) $(get_host_ip) ${CNTNRNAME}\nThis script was run$(check_mode "${*}")by ${MYINVOKER} on $(date)\n############################################################\n\n" > "${LOG_FILE}"
 		fi
 	fi
 }
@@ -826,8 +846,9 @@ function enable_logging() {
 function run_playbook() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	ANSIBLE_CMD_ARGS=$(echo "${@}" | sed "s/${CNTNRNAME} //")
-	if [[ "${GET_INVENTORY_STATUS}" -eq 0 ]]
+	# shellcheck disable=SC2001
+	ANSIBLE_CMD_ARGS=$(echo "${*}" | sed "s/${CNTNRNAME} //")
+	if [[ ${GET_INVENTORY_STATUS} -eq 0 ]]
 	then
 		### Begin: Define the extra-vars argument list
 		local EVARGS
@@ -838,14 +859,16 @@ function run_playbook() {
 		then
 			ASK_PASS=''
 		else
-			$(docker_cmd) exec -i ${CNTNRNAME} ansible -i "${INVENTORY_PATH}" "$(echo "${HL}" | grep -v 'vcenter')" -m debug -a 'msg={{ ansible_ssh_pass }}' --extra-vars "${EVARGS}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh &>/dev/null && [[ ${?} == 0 ]] && ASK_PASS='' || ASK_PASS='--ask-pass'
+			{ $(docker_cmd) exec -i "${CNTNRNAME}" ansible -i "${INVENTORY_PATH}" "$(echo "${HL}" | grep -v 'vcenter')" -m debug -a 'msg={{ ansible_ssh_pass }}' --extra-vars "${EVARGS}" -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh &>/dev/null && ASK_PASS=""; } || ASK_PASS="--ask-pass"
 		fi
 		### End
 		if [[ -z ${MYINVOKER+x} ]]
 		then
-			$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr
+			# shellcheck disable=SC2086
+			$(docker_cmd) exec -t "${CNTNRNAME}" ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr
 		else
-			$(docker_cmd) exec -e MYINVOKER="${MYINVOKER}" -t ${CNTNRNAME} ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr 1>/dev/null
+			# shellcheck disable=SC2086
+			$(docker_cmd) exec -e MYINVOKER="${MYINVOKER}" -t "${CNTNRNAME}" ansible-playbook playbooks/site.yml -i "${INVENTORY_PATH}" --extra-vars "${EVARGS}" ${ASK_PASS} -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" -e "{auto_dir: '${CONTAINERWD}'}" ${ANSIBLE_CMD_ARGS} -v 2> "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr 1>/dev/null
 		fi
 		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr | grep "${SVCVAULT}") != "" ]] && echo -e "\nUnable to decrypt ${BOLD}${SVCVAULT}${NORMAL}" && EC=1
 		[[ $(grep "no vault secrets were found that could decrypt" "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr) == "" ]] && [[ $(grep -i warning "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr) == '' ]] && cat "${ANSIBLE_LOG_LOCATION}"/"${PID}"-run_playbook.stderr
@@ -858,26 +881,31 @@ function disable_logging() {
 	if [[ "${LOG}" == "true" ]] && [[ -f "${LOG_FILE}" ]]
 	then
 		local FILE_TIMESTAMP
+		# shellcheck disable=SC2012
 		[[ $(id -gn | wc -w) -eq 1 ]] && FILE_TIMESTAMP=$(ls --full-time --time-style=full-iso "${LOG_FILE}" | awk '{print $6"-"$7}')
+		# shellcheck disable=SC2012
 		[[ $(id -gn | wc -w) -eq 2 ]] && FILE_TIMESTAMP=$(ls --full-time --time-style=full-iso "${LOG_FILE}" | awk '{print $7"-"$8}')
 		unset ANSIBLE_LOG_PATH
 		NEW_LOG_FILE=${LOG_FILE}.${FILE_TIMESTAMP}
 		chmod 444 "${LOG_FILE}"
 		mv -f "${LOG_FILE}" "${NEW_LOG_FILE}"
-		echo -e "\nThe log file is ${BOLD}${PWD}/Logs/$(basename ${NEW_LOG_FILE})${NORMAL}\n\n"
+		echo -e "\nThe log file is ${BOLD}${PWD}/Logs/$(basename "${NEW_LOG_FILE}")${NORMAL}\n\n"
 	fi
 }
 
 function send_notification() {
 	local CNTNRNAME
 	CNTNRNAME="${1}"
-	ANSIBLE_CMD_ARGS=$(echo "${@}" | sed "s/${CNTNRNAME} //")
-	if [[ "$(check_mode "${ANSIBLE_CMD_ARGS}")" == " " ]]
+	# shellcheck disable=SC2001
+	ANSIBLE_CMD_ARGS=$(echo "${*}" | sed "s/${CNTNRNAME} //")
+	if [[ $(check_mode "${ANSIBLE_CMD_ARGS}") == " " ]]
 	then
 		SCRIPT_ARG="${ANSIBLE_CMD_ARGS//-/dash}"
 		# Send playbook status notification
 		NOTIF_ARGS=$(echo "${ANSIBLE_CMD_ARGS}" | tr ' ' '\n' | sed -e '/--limit\|-l\|--envname/,+1d' | tr '\n' ' ')
-		$(docker_cmd) exec -t ${CNTNRNAME} ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" ${NOTIF_ARGS} -v &>/dev/null
+		# shellcheck disable=SC2086
+		$(docker_cmd) exec -t "${CNTNRNAME}" ansible-playbook playbooks/notify.yml --extra-vars "{SVCFILE: '${CONTAINERWD}/${SVCVAULT}', SNAME: '$(basename "${0}")', SARG: '${SCRIPT_ARG}', LFILE: '${CONTAINERWD}/${NEW_LOG_FILE}'}" --tags notify -e @"${SVCVAULT}" --vault-password-file Bash/get_common_vault_pass.sh -e @"${ANSIBLE_VARS}" ${NOTIF_ARGS} -v &>/dev/null
+		# shellcheck disable=SC2034
 		SCRIPT_STATUS=${?}
 	fi
 }

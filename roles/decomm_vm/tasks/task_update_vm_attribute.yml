@@ -1,7 +1,8 @@
 ---
 # Tasks to update the VM's attribute
-- block:
-    - name: Update {{ attribute_name }} attribute for {{ vm_name }}
+- name: Update attribute
+  block:
+    - name: Update {{ attribute_name + ' attribute for ' + vm_name }}
       community.vmware.vmware_guest_custom_attributes:
         hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
         username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
@@ -13,11 +14,13 @@
         attributes:
           - name: "{{ attribute_name }}"
             value: "{{ attribute_value }}"
-        validate_certs: no
+        validate_certs: false
       register: reg_update_attribute
   rescue:
-    - ansible.builtin.debug:
+    - name: Debug message
+      ansible.builtin.debug:
         msg: "{{ reg_update_attribute }}"
   always:
-    - ansible.builtin.assert:
+    - name: Assert that updating the attribute succeeded
+      ansible.builtin.assert:
         that: reg_update_attribute is succeeded
