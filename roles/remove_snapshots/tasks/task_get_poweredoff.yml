@@ -1,6 +1,6 @@
 ---
 # Tasks to check if a VM is poweredoff
-- name: get the date/time of when {{ vm_name }} in {{ folder_name }} was stopped
+- name: Get the date/time of when {{ vm_name + ' in ' + folder_name + ' was stopped' }}
   community.vmware.vmware_guest_info:
     hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
     username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
@@ -8,17 +8,19 @@
     datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
     folder: "{{ folder_name }}"
     uuid: "{{ vm_uuid }}"
-    validate_certs: no
+    validate_certs: false
     schema: 'vsphere'
     properties: [
       "summary.storage.timestamp"
     ]
   register: reg_stopped_info
-  no_log: yes
-  ignore_errors: yes
-- name: define list of offline VMs
+  no_log: true
+  ignore_errors: true
+- name: Define list of offline VMs
   ansible.builtin.set_fact:
-    offline_vm_list: "{{ offline_vm_list|default([]) + [{ 'vm_folder': folder_name, 'vm_name': vm_name, 'vm_uuid': vm_uuid, 'stopped': reg_stopped_info.instance.summary.storage.timestamp|split('T')|first}] }}"
-    offline_list: "{{ offline_list|default([]) + [folder_name + ': ' + vm_name + ': stopped on ' + reg_stopped_info.instance.summary.storage.timestamp|split('T')|first] }}"
+    offline_vm_list: "{{ offline_vm_list | default([]) + [{'vm_folder': folder_name, 'vm_name': vm_name, 'vm_uuid': vm_uuid, 'stopped': stop_date}] }}"
+    offline_list: "{{ offline_list | default([]) + [folder_name + ': ' + vm_name + ': stopped on ' + stop_date] }}"
   when:
-    - (ansible_date_time.date|to_datetime('%Y-%m-%d') - reg_stopped_info.instance.summary.storage.timestamp|split('T')|first|to_datetime('%Y-%m-%d')).days|int >= 100
+    - (ansible_date_time.date | to_datetime('%Y-%m-%d') - stop_date | to_datetime('%Y-%m-%d')).days | int >= 100
+  vars:
+    stop_date: "{{ reg_stopped_info.instance.summary.storage.timestamp | split('T') | first }}"

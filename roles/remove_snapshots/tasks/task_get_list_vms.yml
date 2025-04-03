@@ -1,11 +1,11 @@
 ---
 # Tasks to get the list of VMs
-- name: get the list of VMs
+- name: Get the list of VMs
   community.vmware.vmware_vm_info:
     hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
     username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
     password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-    vm_type: "{{ object_type|default('vm') }}"
-    validate_certs: no
+    vm_type: "{{ object_type | default('vm') }}"
+    validate_certs: false
   register: reg_vm_list
-  no_log: yes
+  no_log: true
