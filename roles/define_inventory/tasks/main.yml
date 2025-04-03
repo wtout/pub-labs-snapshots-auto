@@ -41,18 +41,14 @@
     - name: Verify that primary maximum snapshot age is valid
       ansible.builtin.assert:
         that:
-          - "dcpmsa | type_debug == 'int'"
-        fail_msg: "The snapshot maximum age defined, {{ dcpmsa }}, is not an integer. Aborting!"
-      vars:
-        dcpmsa: "{{ environment_definition.datacenter.primary.max_snapshot_age }}"
+          - "environment_definition.datacenter.primary.max_snapshot_age | type_debug == 'int'"
+        fail_msg: "The snapshot maximum age defined, {{ environment_definition.datacenter.primary.max_snapshot_age }}, is not an integer. Aborting!"
 
     - name: Verify that primary VM age is valid
       ansible.builtin.assert:
         that:
-          - "dcpva | type_debug == 'int'"
-        fail_msg: "The VM age defined, {{ dcpva }}, is not an integer. Aborting!"
-        vars:
-          dcpva: "{{ environment_definition.datacenter.primary.vm_age }}"
+          - "environment_definition.datacenter.primary.vm_age | type_debug == 'int'"
+        fail_msg: "The VM age defined, {{ environment_definition.datacenter.primary.vm_age }}, is not an integer. Aborting!"
 
     - name: Detect directory owner
       ansible.builtin.shell:
