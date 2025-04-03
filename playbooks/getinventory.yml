@@ -3,7 +3,7 @@
 - name: Define customer build inventory
   hosts: localhost
   any_errors_fatal: true
-  gather_facts: no
+  gather_facts: false
 
   roles:
     - role: define_inventory

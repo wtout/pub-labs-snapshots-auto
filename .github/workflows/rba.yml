@@ -1,0 +1,224 @@
+name: Release Branch Automation
+
+# Controls when the action will run
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/*
+  pull_request:
+
+env:
+  MYGH_TOKEN: ${{ secrets.WASS }}
+  ORIGINAL_REPO_NAME: ${{ github.event.repository.name }}
+  ORG_NAME: ${{ github.actor }}
+  REGISTRY_USER: ${{ vars.DOCKERHUB_USERNAME }}
+  REGISTRY_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+  IMAGE_REGISTRY: registry-1.docker.io
+
+jobs:
+
+  get_info:
+    outputs:
+      is-complete: ${{ steps.ic.outputs.is-complete }}
+      current-branch: ${{ steps.cb.outputs.current-branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Check Complete Status
+        id: ic
+        run: |
+          if echo "${{ github.event.head_commit.message }}" | grep -E 'Release Complete' &>/dev/null
+          then
+            echo "is-complete=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-complete=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Get Current Branch
+        id: cb
+        run: |
+          echo "current-branch=$(git branch | grep '^\* ' | awk '{print $NF}')" >> $GITHUB_OUTPUT
+
+  lint_bash:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Find Bash Scripts
+        id: findbash
+        run: |
+          echo "bash-files=$(find Bash -type f -name play_*.sh | tr '\n' ' ')" >> $GITHUB_OUTPUT
+      - name: Check Bash Code
+        run: |
+          for scrp in ${{ steps.findbash.outputs.bash-files }}
+          do
+            shellcheck -ax -P ./Bash "${scrp}"
+          done
+
+  lint_ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Install Ansible CLI and Python Module
+        run: |
+          sudo apt update
+          sudo apt install python3-pip
+          pip3 install ansible==10.7.0
+      - name: Install ansible-lint
+        run: sudo apt install ansible-lint
+      - name: Find Ansible Playbooks
+        id: findansible
+        run: |
+          echo "playbook-files=$(find playbooks -type f -name *.yml | tr '\n' ' ')" >> $GITHUB_OUTPUT
+      - name: Check Ansible Code
+        run: |
+          for plbk in ${{ steps.findansible.outputs.playbook-files }}
+          do
+            ansible-lint -x no-tabs "${plbk}"
+          done
+
+  test_deploy:
+    runs-on: ubuntu-latest
+    needs: [lint_bash, lint_ansible]
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Login to DockerHub
+        uses: redhat-actions/podman-login@v1
+        with:
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+      - name: Configure Git
+        run: |
+          git config user.email \<\>
+          git config user.name "Wassim Tout"
+      - name: Create Bash/vp.sh
+        run: |
+          echo -e "#! /bin/bash\necho ansible" > Bash/vp.sh
+          chmod 755 Bash/vp.sh
+      - name: Create .repovault.yml Vault
+        run: |
+          echo -e "REPOUSER='${{ env.ORG_NAME }}'\nREPOPASS='${{ env.MYGH_TOKEN }}'" > vars/.repovault.yml
+          ansible-vault encrypt vars/.repovault.yml --vault-password-file Bash/vp.sh
+      - name: Run Test
+        run: |
+          echo 'export MYINVOKER=github' >> ~/.bashrc
+          bash -x Bash/play_deploy.sh --envname build_def_file --skip-tags $(grep -r ' tags:' roles/ | awk -F 'tags: ' '{print $NF}' | sed "s/\[\|\]\|'\|,//g" | tr ' ' '\n' | grep -ve 'always\|never\|define_inventory' | sort -u | xargs | tr ' ' ',')
+
+  merge_release:
+    if: needs.get_info.outputs.is-complete == 'true'
+    runs-on: ubuntu-latest
+    needs: [get_info, test_deploy]
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ env.MYGH_TOKEN }}
+      - name: Configure Git
+        run: |
+          git config user.email \<\>
+          git config user.name "Wassim Tout"
+          git remote set-url origin https://${{ env.ORG_NAME }}:${{ env.MYGH_TOKEN }}@github.com/${{ env.ORG_NAME }}/${{ env.ORIGINAL_REPO_NAME }}.git
+      - name: Get Remote Updates
+        run: |
+          git remote update
+      - name: Update Local ${{ needs.get_info.outputs.current-branch }} Branch
+        run: |
+          git pull origin ${{ needs.get_info.outputs.current-branch }}
+      - name: Get The Last Tag
+        id: lt
+        uses: wtout/get-last-tag-action@v1
+      - name: Show the Action Tag
+        run: |
+          echo "The current tag is ${{ steps.lt.outputs.last-tag }}"
+      - name: Determine the release-type
+        id: rt
+        run: |
+          read -r P1 P2 P3 <<< $(echo ${{ needs.get_info.outputs.current-branch }} | awk -F '/' '{print $NF}' | tr '.' ' ')
+          { [[ ${P2} -eq 0 ]] && REL_TYPE='Major'; } || REL_TYPE='Minor'
+          echo "release_type=${REL_TYPE}" >> $GITHUB_OUTPUT
+      - name: Get The Next Tag
+        id: nt
+        uses: wtout/get-next-tag-action@v6
+        with:
+          release-type: ${{ steps.rt.outputs.release_type }}
+          current-tag: ${{ steps.lt.outputs.last-tag }}
+      - name: Get List of Files From Release branch
+        run: |
+          git ls-files | sort > releasefiles
+      - name: Switch to master branch
+        run: |
+          git checkout master
+      - name: Update Local master Branch
+        run: |
+          git pull origin master
+      - name: Test Merge
+        run: |
+          git merge --no-commit --no-ff ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs || exit 0
+          if [[ -f .git/MERGE_HEAD ]]
+          then
+            git merge --abort
+          fi
+      - name: Merge ${{ needs.get_info.outputs.current-branch }} into master
+        run: |
+          git merge ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs
+      - name: Get List of Files From Master branch
+        run: |
+          git ls-files | sort > masterfiles
+      - name: Delete Files And Commit If Removed Files Are Still Present
+        run: |
+          if diff releasefiles masterfiles | grep '^>'
+          then
+            git rm -f $(diff releasefiles masterfiles | grep '^>' | awk '{print $NF}' | tr '\n' ' ')
+            git commit -m 'Removed files deleted by Release'
+          fi
+      - name: Create New Tag
+        run: |
+          git tag -a ${{ steps.nt.outputs.next-tag }} -m "Create release tag ${{ steps.nt.outputs.next-tag }}"
+      - name: Push master Branch And Tags to Remote Repo
+        run: |
+          git push origin master
+          git push origin --tags
+      - name: Switch to develop branch
+        run: |
+          git checkout develop
+      - name: Update Local develop Branch
+        run: |
+          git pull origin develop
+      - name: Test Merge
+        run: |
+          git merge --no-commit --no-ff ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs || exit 0
+          if [[ -f .git/MERGE_HEAD ]]
+          then
+            git merge --abort
+          fi
+      - name: Merge ${{ needs.get_info.outputs.current-branch }} into develop
+        run: |
+          git merge ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs
+      - name: Get List of Files From Develop Branch
+        run: |
+          git ls-files | sort > developfiles
+      - name: Delete Files And Commit If Removed Files Are Still Present
+        run: |
+          if diff releasefiles developfiles | grep '^>'
+          then
+            git rm -f $(diff releasefiles developfiles | grep '^>' | awk '{print $NF}' | tr '\n' ' ')
+            git commit -m 'Removed files deleted by Release'
+          fi
+      - name: Push develop Branch to Remote Repo
+        run: |
+          git push origin develop
+      - name: Delete ${{ needs.get_info.outputs.current-branch }} Branch From Remote Repo
+        run: |
+          git push origin :${{ needs.get_info.outputs.current-branch }}

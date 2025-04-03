@@ -1,6 +1,6 @@
 ---
 # Tasks to update the VM's date-created attribute
-- name: update date-created attribute
+- name: Update date-created attribute
   block:
     - name: Update date-created attribute for {{ curr_vm }}
       community.vmware.vmware_guest_custom_attributes:
@@ -13,15 +13,16 @@
         state: present
         attributes:
           - name: date-created
-            value: "{{ reg_var.instance.config.createDate|split('T')|first }}"
-        validate_certs: no
+            value: "{{ reg_var.instance.config.createDate | split('T') | first }}"
+        validate_certs: false
       register: reg_add_attribute
   rescue:
-    - ansible.builtin.debug:
+    - name: Display error message
+      ansible.builtin.debug:
         msg:
           - "The automation user does not have sufficient privileges to modify custom attributes for {{ curr_folder }}/{{ curr_vm }}"
-    - name: define list of non-updated VMs
+    - name: Define list of non-updated VMs
       ansible.builtin.set_fact:
-        noupdate_list: "{{ noupdate_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+        noupdate_list: "{{ noupdate_list | default([]) + [curr_folder + ': ' + curr_vm] }}"
       when:
         - reg_add_attribute.module_stderr is search('Permission to perform this operation was denied')
