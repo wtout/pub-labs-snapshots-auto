@@ -103,6 +103,7 @@ jobs:
         run: |
           git config user.email \<\>
           git config user.name "Wassim Tout"
+          git remote update
       - name: Create Bash/vp.sh
         run: |
           echo -e "#! /bin/bash\necho ansible" > Bash/vp.sh
