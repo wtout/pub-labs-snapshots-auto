@@ -1,72 +1,88 @@
 ---
 # tasks file for define_inventory
-- block:
-  - name: read build definition
-    include_vars:
-      file: "{{ auto_dir + '/' + SYS_NAME }}"
-      name: 'environment_definition'
+- name: Main block
+  tags: ['always', 'define_inventory']
+  check_mode: false
+  block:
+    - name: Read build definition
+      ansible.builtin.include_vars:
+        file: "{{ auto_dir + '/' + SYS_NAME }}"
+        name: 'environment_definition'
 
-  - ansible.builtin.debug: var=environment_definition
+    - name: Display environment_definition
+      ansible.builtin.debug:
+        var: environment_definition
 
-  - name: check if required variables are defined
-    ansible.builtin.set_fact:
-      pdn: "{{ 'Primary Datacenter name is not defined' if (environment_definition.datacenter.primary.name is not defined or environment_definition.datacenter.primary.name == none) else '' }}"
-      pma: "{{ 'Primary snapshot maximum age is not defined' if (environment_definition.datacenter.primary.max_snapshot_age is not defined or environment_definition.datacenter.primary.max_snapshot_age == none) else '' }}"
-      pva: "{{ 'Primary VM age is not defined' if (environment_definition.datacenter.primary.vm_age is not defined or environment_definition.datacenter.primary.vm_age == none) else '' }}"
+    - name: Check if required variables are defined
+      ansible.builtin.set_fact:
+        pdn: "{{ 'Primary Datacenter name is not defined' if (dcpn is not defined or dcpn == none) else '' }}"
+        pma: "{{ 'Primary snapshot maximum age is not defined' if (dcpmsa is not defined or dcpmsa == none) else '' }}"
+        pva: "{{ 'Primary VM age is not defined' if (dcpva is not defined or dcpva == none) else '' }}"
+      vars:
+        dcpn: "{{ environment_definition.datacenter.primary.name }}"
+        dcpmsa: "{{ environment_definition.datacenter.primary.max_snapshot_age }}"
+        dcpva: "{{ environment_definition.datacenter.primary.vm_age }}"
 
-  - name: verify that all variables are defined
-    ansible.builtin.assert:
-      that:
-        - vars[item] == ''
-      fail_msg: "{{ vars[item] }}"
-    loop: [ pdn, pma ]
+    - name: Verify that all variables are defined
+      ansible.builtin.assert:
+        that:
+          - vars[item] == ''
+        fail_msg: "{{ vars[item] }}"
+      loop: [pdn, pma]
 
-  - name: verify that primary datacenter is supported
-    ansible.builtin.assert:
-      that:
-        - "datacenters[environment_definition.datacenter.primary.name] is defined"
-      fail_msg: "The primary datacenter selected, {{ environment_definition.datacenter.primary.name }}, is not in the list of supported datacenters. Aborting!"
+    - name: Verify that primary datacenter is supported
+      ansible.builtin.assert:
+        that:
+          - "datacenters[dcpn] is defined"
+        fail_msg: "The primary datacenter selected, {{ dcpn }}, is not in the list of supported datacenters. Aborting!"
+      vars:
+        dcpn: "{{ environment_definition.datacenter.primary.name }}"
 
-  - name: verify that primary maximum snapshot age is valid
-    ansible.builtin.assert:
-      that:
-        - "environment_definition.datacenter.primary.max_snapshot_age|type_debug == 'int'"
-      fail_msg: "The snapshot maximum age defined, {{ environment_definition.datacenter.primary.max_snapshot_age }}, is not an integer. Aborting!"
+    - name: Verify that primary maximum snapshot age is valid
+      ansible.builtin.assert:
+        that:
+          - "environment_definition.datacenter.primary.max_snapshot_age | type_debug == 'int'"
+        fail_msg: "The snapshot maximum age defined, {{ environment_definition.datacenter.primary.max_snapshot_age }}, is not an integer. Aborting!"
 
-  - name: verify that primary VM age is valid
-    ansible.builtin.assert:
-      that:
-        - "environment_definition.datacenter.primary.vm_age|type_debug == 'int'"
-      fail_msg: "The VM age defined, {{ environment_definition.datacenter.primary.vm_age }}, is not an integer. Aborting!"
+    - name: Verify that primary VM age is valid
+      ansible.builtin.assert:
+        that:
+          - "environment_definition.datacenter.primary.vm_age | type_debug == 'int'"
+        fail_msg: "The VM age defined, {{ environment_definition.datacenter.primary.vm_age }}, is not an integer. Aborting!"
 
-  - name: detect directory owner
-    ansible.builtin.shell: ls -ld {{ auto_dir }}/Bash | awk '{print $3}' | xargs
-    register: dir_owner
+    - name: Detect directory owner
+      ansible.builtin.shell:
+        cmd: set -o pipefail && ls -ld {{ auto_dir }}/Bash | awk '{print $3}' | xargs
+        executable: /bin/bash
+      register: dir_owner
+      changed_when: false
 
-  - name: detect directory group
-    ansible.builtin.shell: ls -ld {{ auto_dir }}/Bash | awk '{print $4}' | xargs
-    register: dir_group
+    - name: Detect directory group
+      ansible.builtin.shell:
+        cmd: set -o pipefail && ls -ld {{ auto_dir }}/Bash | awk '{print $4}' | xargs
+        executable: /bin/bash
+      register: dir_group
+      changed_when: false
 
-  - name: generate build inventory
-    ansible.builtin.copy:
-      src: "files/inventory/"
-      dest: "{{ auto_dir + '/inventories/' + SYS_NAME|basename|splitext|first|lower }}"
-      owner: "{{ dir_owner.stdout }}"
-      group: "{{ dir_group.stdout }}"
-    become: yes
+    - name: Generate build inventory
+      ansible.builtin.copy:
+        src: "files/inventory/"
+        dest: "{{ auto_dir + '/inventories/' + SYS_NAME | basename | splitext | first | lower }}"
+        owner: "{{ dir_owner.stdout }}"
+        group: "{{ dir_group.stdout }}"
+        mode: '644'
+      become: true
 
-  - name: customize inventory
-    ansible.builtin.template:
-      src: "{{ tmpl_item.name }}"
-      dest: "{{ tmpl_item.dest }}"
-      owner: "{{ dir_owner.stdout }}"
-      group: "{{ dir_group.stdout }}"
-    loop:
-      - { name: 'templates/all.j2', dest: "{{ auto_dir + '/inventories/' + SYS_NAME|basename|splitext|first|lower + '/group_vars/all.yml' }}" }
-      - { name: 'templates/hosts.j2', dest: "{{ auto_dir + '/inventories/' + SYS_NAME|basename|splitext|first|lower + '/hosts.yml' }}" }
-    loop_control:
-      loop_var: tmpl_item
-    become: yes
-
-  check_mode: no
-  tags: [ 'always', 'define_inventory' ]
+    - name: Customize inventory
+      ansible.builtin.template:
+        src: "{{ tmpl_item.name }}"
+        dest: "{{ tmpl_item.dest }}"
+        owner: "{{ dir_owner.stdout }}"
+        group: "{{ dir_group.stdout }}"
+        mode: '644'
+      loop:
+        - { name: 'templates/all.j2', dest: "{{ auto_dir + '/inventories/' + SYS_NAME | basename | splitext | first | lower + '/group_vars/all.yml' }}" }
+        - { name: 'templates/hosts.j2', dest: "{{ auto_dir + '/inventories/' + SYS_NAME | basename | splitext | first | lower + '/hosts.yml' }}" }
+      loop_control:
+        loop_var: tmpl_item
+      become: true

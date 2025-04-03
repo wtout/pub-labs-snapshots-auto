@@ -1,22 +1,24 @@
 ---
 # tasks to determine whether or not the folder is empty
-- block:
-  - name: Get the list of VMs in {{ foldername }}
-    community.vmware.vmware_vm_info:
-      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
-      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
-      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
-      folder: "{{ foldername }}"
-      show_net: false
-      validate_certs: no
-    check_mode: no
-    register: vm_info
-    delegate_to: localhost
-    no_log: yes
-  - name: define folder_empty
-    ansible.builtin.set_fact:
-      folder_empty: "{{ vm_info.virtual_machines == [] }}"
+- name: Check if the folder is empty
+  block:
+    - name: Get the list of VMs in {{ foldername }}
+      community.vmware.vmware_vm_info:
+        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+        folder: "{{ foldername }}"
+        show_net: false
+        validate_certs: false
+      check_mode: false
+      register: vm_info
+      delegate_to: localhost
+      no_log: true
+    - name: Define folder_empty
+      ansible.builtin.set_fact:
+        folder_empty: "{{ vm_info.virtual_machines == [] }}"
   rescue:
-  - ansible.builtin.debug:
-      msg:
-        - "{{ vm_info }}"
+    - name: Debug message
+      ansible.builtin.debug:
+        msg:
+          - "{{ vm_info }}"

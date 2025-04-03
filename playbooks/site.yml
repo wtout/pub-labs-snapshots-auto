@@ -4,7 +4,7 @@
   hosts: all
   any_errors_fatal: true
   max_fail_percentage: 0
-  gather_facts: no
+  gather_facts: false
 
   roles:
     - role: check_creds
@@ -14,7 +14,7 @@
   hosts: all
   any_errors_fatal: true
   max_fail_percentage: 0
-  gather_facts: no
+  gather_facts: false
 
   roles:
     - role: remove_snapshots
