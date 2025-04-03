@@ -1,4 +1,4 @@
-source $(dirname "${0}")/common_parameters.sh
+source "$(dirname "${0}")/common_parameters.sh"
 
 # Main
 PID="${$}"

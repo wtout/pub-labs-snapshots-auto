@@ -1,10 +1,9 @@
 ---
 # Tasks to get the size of a VM snapshot
-- block:
-  - name: define the size of the snapshots found on {{ curr_vm }}
-    ansible.builtin.set_fact:
-      snaps_size: "{{ snaps_size|int + file_item.size|int }}"
-    when: file_item.name is regex('-Snapshot(' + snaps_ids|join('|') + ')')
-    loop: "{{ reg_snaps_info.instance.layoutEx.file }}"
-    loop_control:
-      loop_var: file_item
+- name: Define the size of the snapshots found on {{ curr_vm }}
+  ansible.builtin.set_fact:
+    snaps_size: "{{ snaps_size | int + file_item.size | int }}"
+  when: file_item.name is regex('-Snapshot(' + snaps_ids | join('|') + ')')
+  loop: "{{ reg_snaps_info.instance.layoutEx.file }}"
+  loop_control:
+    loop_var: file_item
