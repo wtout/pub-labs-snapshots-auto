@@ -105,6 +105,8 @@ jobs:
         run: |
           git config user.email \<\>
           git config user.name "Wassim Tout"
+      - name: Get Remote Updates
+        run: |
           git remote update
       - name: Create Bash/vp.sh
         run: |
