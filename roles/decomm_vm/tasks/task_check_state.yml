@@ -1,0 +1,26 @@
+---
+# Tasks to check if a VM is poweredoff
+- name: get info for {{ curr_vm }} in {{ curr_folder }}
+  community.vmware.vmware_guest_info:
+    hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+    username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+    password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+    datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+    folder: "{{ curr_folder }}"
+    uuid: "{{ curr_uuid }}"
+    validate_certs: no
+  register: reg_guest_info
+  no_log: yes
+  ignore_errors: yes
+- ansible.builtin.include_role:
+    name: remove_snapshots
+    tasks_from: task_get_poweredoff.yml
+    apply:
+      vars:
+        folder_name: "{{ curr_folder }}"
+        vm_name: "{{ curr_vm }}"
+        vm_uuid: "{{ curr_uuid }}"
+  when:
+    - reg_guest_info is succeeded
+    - reg_guest_info.instance.hw_power_status == 'poweredOff'
+    - reg_guest_info.instance.hw_name is not search('on-decomm-list')
