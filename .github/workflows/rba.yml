@@ -82,7 +82,7 @@ jobs:
         run: |
           for plbk in ${{ steps.findansible.outputs.playbook-files }}
           do
-            ansible-lint -x no-tabs "${plbk}"
+            ansible-lint "${plbk}"
           done
 
   test_deploy:
