@@ -17,6 +17,7 @@ env:
   REGISTRY_USER: ${{ vars.DOCKERHUB_USERNAME }}
   REGISTRY_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
   IMAGE_REGISTRY: registry-1.docker.io
+  HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
 jobs:
 
@@ -33,7 +34,7 @@ jobs:
       - name: Check Complete Status
         id: ic
         run: |
-          if echo "${{ github.event.head_commit.message }}" | grep -E '(Feature|HotFix) Complete' &>/dev/null
+          if echo "${{ env.HEAD_COMMIT_MESSAGE }}" | grep -E '(Feature|HotFix) Complete' &>/dev/null
           then
             echo "is-complete=true" >> $GITHUB_OUTPUT
           else
@@ -96,7 +97,7 @@ jobs:
         with:
           token: ${{ env.MYGH_TOKEN }}
       - name: Login to DockerHub
-        uses: redhat-actions/podman-login@v1
+        uses: redhat-actions/podman-login@4934294ad0449894bcd1e9f191899d7292469603 # v1
         with:
           username: ${{ env.REGISTRY_USER }}
           password: ${{ env.REGISTRY_PASSWORD }}
@@ -161,7 +162,7 @@ jobs:
           fi
       - name: Merge ${{ needs.get_info.outputs.current-branch }} into develop
         run: |
-          git merge ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs
+          git merge --no-ff ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs
       - name: Get List of Files From Develop branch
         run: |
           git ls-files | sort > developfiles
@@ -231,7 +232,7 @@ jobs:
           fi
       - name: Merge ${{ needs.get_info.outputs.current-branch }} into master
         run: |
-          git merge ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs
+          git merge --no-ff ${{ needs.get_info.outputs.current-branch }} --allow-unrelated-histories -X theirs
       - name: Get List of Files From Master branch
         run: |
           git ls-files | sort > masterfiles
