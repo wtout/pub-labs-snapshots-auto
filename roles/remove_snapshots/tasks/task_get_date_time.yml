@@ -1,0 +1,6 @@
+---
+# Tasks to get the current date and time
+- name: get current date and time
+  ansible.builtin.setup:
+    filter:
+      - 'date_time'

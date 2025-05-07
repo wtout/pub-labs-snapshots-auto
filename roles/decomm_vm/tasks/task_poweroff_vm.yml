@@ -1,0 +1,21 @@
+---
+# Tasks to power-off the VM
+- block:
+  - name: Power-off {{ vm_name }}
+    community.vmware.vmware_guest:
+      hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+      username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+      password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+      datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+      folder: "{{ folder_name }}"
+      uuid: "{{ vm_uuid }}"
+      state: poweredoff
+      validate_certs: no
+    register: reg_poweroff
+    no_log: yes
+  rescue:
+  - ansible.builtin.debug:
+      msg: "{{ reg_poweroff }}"
+  always:
+  - ansible.builtin.assert:
+      that: reg_poweroff is succeeded

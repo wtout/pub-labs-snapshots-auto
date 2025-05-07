@@ -1,0 +1,31 @@
+---
+# Variables for all hosts
+
+##################################################################################
+# Datacenter where VM snapshots are to be removed
+##################################################################################
+datacenter:
+
+  primary:
+
+    # Available datacenters: RTP-Staging, PAE-HX-DC-1, PAE-HX-DC-2, PAE-HX-DC-3, PAE-HX-DC-4, Plat-Ops, Dev Engineering, cdra-Build-Development, PAE-Customer-Build, RTP5, Alln1 (string)
+    name: '{{ environment_definition.datacenter.primary.name }}'
+
+    # Snapshots maximum age (required) (integer)
+    max_snapshot_age: {{ environment_definition.datacenter.primary.max_snapshot_age }}
+
+    # VM age (required) (integer)
+    vm_age: {{ environment_definition.datacenter.primary.vm_age }}
+
+##################################################################################
+# System configuration variables
+##################################################################################
+sysconfig:
+
+  primary:
+
+    # DNS servers list
+    dns_servers: {{ [ '172.23.251.21', '172.23.251.22' ] if environment_definition.datacenter.primary.name is regex('RTP-Staging|STG') else ['172.30.251.21', '172.30.251.22'] if environment_definition.datacenter.primary.name is regex('PAE-HX-DC|Dev Engineering') else ['172.19.251.21', '172.19.251.22'] }}
+
+    # Domain name to use
+    domain_name: "{{ ('staging.' if environment_definition.datacenter.primary.name is regex('RTP-Staging|STG') else '') + 'cisco-' + ('pae' if environment_definition.datacenter.primary.name is regex('PAE-HX-DC|Dev Engineering') else 'cms') + '.com' }}"
