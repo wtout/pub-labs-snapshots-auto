@@ -202,7 +202,8 @@ function image_prune() {
 	local IIDLIST
 	CIID=$($(docker_cmd) images | grep -E "${CONTAINERREPO}.*${ANSIBLE_VERSION}" | awk '{print $3}')
 	[[ "${CIID}" == "" ]] && IIDLIST=$($(docker_cmd) images -a -q) || IIDLIST=$($(docker_cmd) images -a -q | grep -v "${CIID}")
-	[[ "${IIDLIST}" != "" ]] && $(docker_cmd) rmi "${IIDLIST}" -f
+	# shellcheck disable=SC2086
+	[[ "${IIDLIST}" != "" ]] && $(docker_cmd) rmi ${IIDLIST} -f
 }
 
 function check_image() {
@@ -252,9 +253,9 @@ function start_container() {
 		[[ $- =~ x ]] && debug=1 && [[ "${SECON}" == "true" ]] && set +x
 		if [[ ${ANSIBLE_LOG_PATH} == "" ]]
 		then
-			$(docker_cmd) run --rm -e MYPROXY="${PROXY_ADDRESS}" -e MYHOME="${PWD}" -e MYHOSTNAME="$(hostname)" -e MYCONTAINERNAME="${CNTNRNAME}" -e MYIP="$(get_host_ip)" --user ansible -w "${CONTAINERWD}" -v /data:/data:z -v /tmp:/tmp:z -v "${PWD}":"${CONTAINERWD}":z --name "${CNTNRNAME}" -t -d --entrypoint /bin/bash "${CONTAINERREPO}":"${ANSIBLE_VERSION}" 1>/dev/null
+			$(docker_cmd) run --rm -e MYPROXY="${PROXY_ADDRESS}" -e MYHOME="${PWD}" -e MYHOSTNAME="$(hostname)" -e MYCONTAINERNAME="${CNTNRNAME}" -e MYIP="$(get_host_ip)" --user ansible -w "${CONTAINERWD}" -v /tmp:/tmp:z -v "${PWD}":"${CONTAINERWD}":z --name "${CNTNRNAME}" -t -d --entrypoint /bin/bash "${CONTAINERREPO}":"${ANSIBLE_VERSION}" 1>/dev/null
 		else
-			$(docker_cmd) run --rm -e ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH}" -e ANSIBLE_FORKS="${NUM_HOSTSINPLAY}" -e MYPROXY="${PROXY_ADDRESS}" -e MYHOME="${PWD}" -e MYHOSTNAME="$(hostname)" -e MYCONTAINERNAME="${CNTNRNAME}" -e MYIP="$(get_host_ip)" -e MYHOSTOS="$(get_os)" --user ansible -w "${CONTAINERWD}" -v /data:/data:z -v /tmp:/tmp:z -v "${HOME}"/.ssh:/home/ansible/.ssh:z -v "${PWD}":"${CONTAINERWD}":z --name "${CNTNRNAME}" -t -d --entrypoint /bin/bash "${CONTAINERREPO}":"${ANSIBLE_VERSION}" 1>/dev/null
+			$(docker_cmd) run --rm -e ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH}" -e ANSIBLE_FORKS="${NUM_HOSTSINPLAY}" -e MYPROXY="${PROXY_ADDRESS}" -e MYHOME="${PWD}" -e MYHOSTNAME="$(hostname)" -e MYCONTAINERNAME="${CNTNRNAME}" -e MYIP="$(get_host_ip)" -e MYHOSTOS="$(get_os)" --user ansible -w "${CONTAINERWD}" -v /tmp:/tmp:z -v "${HOME}"/.ssh:/home/ansible/.ssh:z -v "${PWD}":"${CONTAINERWD}":z --name "${CNTNRNAME}" -t -d --entrypoint /bin/bash "${CONTAINERREPO}":"${ANSIBLE_VERSION}" 1>/dev/null
 		fi
 		[[ ${debug} == 1 ]] && set -x
 		[[ $(check_container "${CNTNRNAME}"; echo "${?}") -ne 0 ]] && echo "Unable to start container ${CNTNRNAME}" && exit 1
@@ -443,14 +444,16 @@ function get_proxy() {
 }
 
 function add_write_permission() {
-	for i in "${@}"
+	# shellcheck disable=SC2068
+	for i in ${@}
 	do
 		sudo chmod o+w "${i}"
 	done
 }
 
 function remove_write_permission() {
-	for i in "${@}"
+	# shellcheck disable=SC2068
+	for i in ${@}
 	do
 		sudo chmod o-w "${i}"
 	done
