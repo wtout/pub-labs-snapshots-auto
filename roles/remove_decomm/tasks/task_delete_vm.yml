@@ -1,0 +1,13 @@
+---
+# Tasks to delete a VM in a given folder
+- name: Delete VM
+  community.vmware.vmware_guest:
+    hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+    username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+    password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+    datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+    folder: "{{ vm_folder }}"
+    uuid: "{{ vm_uuid }}"
+    state: absent
+    force: yes
+    validate_certs: no

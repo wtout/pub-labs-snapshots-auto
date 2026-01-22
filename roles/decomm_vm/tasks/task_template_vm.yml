@@ -1,0 +1,20 @@
+---
+# Tasks to convert the VM to template
+- block:
+    - name: Convert {{ vm_name }} to template
+      community.vmware.vmware_guest:
+        hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+        username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+        password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+        datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+        uuid: "{{ vm_uuid }}"
+        is_template: yes
+        validate_certs: no
+      register: reg_template_vm
+#      no_log: yes
+  rescue:
+    - ansible.builtin.debug:
+        msg: "{{ reg_template_vm }}"
+  always:
+    - ansible.builtin.assert:
+        that: reg_template_vm is succeeded

@@ -1,0 +1,82 @@
+---
+# Tasks to delete a VM in a given folder
+- name: get info for {{ curr_vm }} in {{ curr_folder }}
+  community.vmware.vmware_guest_info:
+    hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+    username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+    password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+    datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+    folder: "{{ curr_folder }}"
+    uuid: "{{ curr_uuid }}"
+    validate_certs: no
+  register: reg_guest_info
+  no_log: yes
+  ignore_errors: yes
+- name: define list of problematic VMs
+  ansible.builtin.set_fact:
+    problematic_list: "{{ problematic_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+  when: reg_guest_info is failed
+- block:
+  - block:
+    - block:
+      - block:
+        - ansible.builtin.include_tasks:
+            file: task_delete_dns_record.yml
+            apply:
+              vars:
+                name_server: "{{ dserver }}"
+                domain_name: "{{ dname }}"
+                vm_name: "{{ curr_vm.split('>>')|last }}"
+          vars:
+            dserver: "{{ sysconfig.primary.dns_servers[0] }}"
+            dname: "{{ sysconfig.primary.domain_name }}"
+        - ansible.builtin.include_tasks:
+            file: task_delete_dns_record.yml
+            apply:
+              vars:
+                name_server: "{{ dserver }}"
+                domain_name: "{{ dname }}"
+                vm_name: "{{ curr_vm.split('>>')|last }}"
+          vars:
+            dserver: "{{ sysconfig.primary.dns_servers[0]|regex_replace('^([0-9]{,3})\\.[0-9]{,3}\\.(.*)$','\\1.19.\\2') }}"
+            dname: "{{ sysconfig.primary.domain_name|replace('-pae','-cms') }}"
+          when: hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] is search('paevcenter01')
+        when: not ipavailable
+      - ansible.builtin.include_tasks:
+          file: task_delete_dns_record.yml
+          apply:
+            vars:
+              name_server: "{{ dserver }}"
+              domain_name: "{{ dname }}"
+              vm_name: "{{ curr_vm.split('>>')|last }}"
+              vm_ip: "{{ vmip }}"
+        when: ipavailable
+        vars:
+          vmip: "{{ (reg_guest_info.instance.annotation.split('\n')|select('search','ipaddress:')|join).split(': ')|last }}"
+          dserver: "{{ sysconfig.primary.dns_servers[0] if vmip.split('.')[:2]|join('.') == sysconfig.primary.dns_servers[0].split('.')[:2]|join('.') else sysconfig.primary.dns_servers[0]|regex_replace('^([0-9]{,3})\\.[0-9]{,3}\\.(.*)$','\\1.' + vmip.split('.')[1] + '.\\2') }}"
+          dname: "{{ sysconfig.primary.domain_name if dserver == sysconfig.primary.dns_servers[0] else sysconfig.primary.domain_name|replace('-pae','-cms') }}"
+      vars:
+        ipavailable: "{{ reg_guest_info.instance.annotation.split('\n')|select('search','ipaddress:')|list != [] }}"
+    - ansible.builtin.include_tasks:
+        file: task_delete_vm.yml
+        apply:
+          vars:
+            vm_folder: "{{ curr_folder }}"
+            vm_uuid: "{{ curr_uuid }}"
+    - name: update list of deleted VMs
+      ansible.builtin.set_fact:
+        deleted_vm_list: "{{ deleted_vm_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+    - name: update list of deleted VMs folders
+      ansible.builtin.set_fact:
+        deleted_vm_folder_list: "{{ deleted_vm_folder_list|default([]) | community.general.lists_union([curr_folder]) }}"
+    when:
+      - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list != {}
+      - (ansible_date_time.date|to_datetime('%Y-%m-%d') - decommdate|to_datetime('%Y-%m-%d')).days|int >= 0
+    vars:
+      note_dtd: "{{ (reg_guest_info.instance.annotation.split('\n')|select('search','date-todecomm:')|join).split(': ')|last }}"
+      attr_dtd: "{{ reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|map(attribute='value')|list|join }}"
+      decommdate: "{{ note_dtd if note_dtd != '' else attr_dtd }}"
+  - ansible.builtin.fail:
+      msg: VMs in this VCenter do not have the required custom attributes for the VM decommissioning process
+    when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list == {}
+  when: reg_guest_info is succeeded

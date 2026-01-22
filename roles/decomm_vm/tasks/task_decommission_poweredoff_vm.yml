@@ -1,0 +1,72 @@
+---
+# Tasks to decommission a poweredoff VM in a given folder
+- name: get info for {{ curr_vm }} in {{ curr_folder }}
+  community.vmware.vmware_guest_info:
+    hostname: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['address'] }}"
+    username: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['username'] }}"
+    password: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['credentials']['password'] }}"
+    datacenter: "{{ hostvars[groups[('dr' if 'dr' in group_names else '') + 'vcenter'][0]]['information']['datacenter'] }}"
+    folder: "{{ curr_folder }}"
+    uuid: "{{ curr_uuid }}"
+    validate_certs: no
+  register: reg_guest_info
+  no_log: yes
+  ignore_errors: yes
+- name: define list of problematic VMs
+  ansible.builtin.set_fact:
+    problematic_list: "{{ problematic_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+  when: reg_guest_info is failed
+- block:
+  - block:
+    - name: update description for {{ curr_vm }}
+      ansible.builtin.include_tasks:
+        file: task_update_vm_description.yml
+        apply:
+          vars:
+            folder_name: "{{ curr_folder }}"
+            vm_name: "{{ curr_vm }}"
+            vm_uuid: "{{ curr_uuid }}"
+            vm_ip: "{{ reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|list|first if reg_guest_info.instance.hw_eth0.ipaddresses|reject('search','[a-z,A-Z]')|length > 0 else '' }}"
+            vm_dtd: "{{ 'date-todecomm: ' + decommdate }}"
+      vars:
+        dtd: "{{ reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|map(attribute='value')|list|join }}"
+        decommdate: "{{ '%Y-%m-%d' | strftime(ansible_date_time.epoch|int + 30*24*3600) if dtd == '' else dtd }}"
+    - name: rename {{ curr_vm }}
+      ansible.builtin.include_tasks:
+        file: task_rename_vm.yml
+        apply:
+          vars:
+            vm_name: "{{ curr_vm }}"
+            vm_moid: "{{ reg_guest_info.instance.moid }}"
+      when: curr_vm is not search('decomm')
+    - name: update date-todecomm attribute for {{ curr_vm }}
+      ansible.builtin.include_tasks:
+        file: task_update_vm_attribute.yml
+        apply:
+          vars:
+            folder_name: "{{ curr_folder }}"
+            vm_name: "{{ curr_vm }}"
+            vm_uuid: "{{ curr_uuid }}"
+            attribute_name: 'date-todecomm'
+            attribute_value: "{{ decommdate }}"
+      vars:
+        dtd: "{{ reg_guest_info.instance.annotation.split('\n')|select('search','date-todecomm:')|list }}"
+        decommdate: "{{ (dtd|join).split(': ')|last if dtd != [] else '%Y-%m-%d' | strftime(ansible_date_time.epoch|int + 30*24*3600) }}"
+#    - name: template {{ curr_vm }}
+#      ansible.builtin.include_tasks:
+#        file: task_template_vm.yml
+#        apply:
+#          vars:
+#            vm_name: "{{ curr_vm }}"
+#            vm_uuid: "{{ curr_uuid }}"
+    - name: update list of VMs to be decommissioned
+      ansible.builtin.set_fact:
+        decomm_vm_list: "{{ decomm_vm_list|default([]) + [curr_folder + ': ' + curr_vm] }}"
+    when:
+      - reg_guest_info.instance.hw_power_status == 'poweredOff'
+      - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-toaudit')|map(attribute='value')|list|join|lower != 'exempt'
+      - reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list != {}
+  - ansible.builtin.fail:
+      msg: VMs in this VCenter do not have the required custom attributes for the VM decommissioning process
+    when: reg_guest_info.instance.customvalues|dict2items|selectattr('key','search','date-todecomm')|list == {}
+  when: reg_guest_info is succeeded

@@ -1,0 +1,9 @@
+---
+# Variables for vcenter
+credentials:
+  username: "{{ datacenters[datacenter.primary.name]['vsphere'].split('.')[-3] if datacenters[datacenter.primary.name]['vsphere']|lower is search('staging') else datacenters[datacenter.primary.name]['vsphere'].split('.')[-2] if datacenters[datacenter.primary.name]['vsphere']|lower is search('exrtp') else datacenters[datacenter.primary.name]['vsphere'].split('.')[-2].split('-')|last }}\\{{ PVCENTER_SERVICE_USER | default('') }}"
+  password: "{{ PVCENTER_SERVICE_PASS | default('') }}"
+
+information:
+  address: "{{ datacenters[datacenter.primary.name]['vsphere'] }}"
+  datacenter: "{{ datacenter.primary.name }}"
